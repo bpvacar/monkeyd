@@ -1,0 +1,51 @@
+name: release
+
+# Push a tag like v0.1.0 to build a universal macOS DMG and attach it to a GitHub Release.
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-darwin,x86_64-apple-darwin
+
+      - name: Cache cargo
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build universal app + DMG and publish release
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          args: --target universal-apple-darwin
+          tagName: ${{ github.ref_name }}
+          releaseName: "MonkeyD ${{ github.ref_name }}"
+          releaseBody: |
+            Universal macOS build (Apple Silicon + Intel).
+
+            **Not yet notarized** — on first launch, right-click MonkeyD → Open → Open,
+            or run `xattr -dr com.apple.quarantine /Applications/MonkeyD.app`.
+          releaseDraft: false
+          prerelease: false
