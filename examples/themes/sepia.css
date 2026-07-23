@@ -1,0 +1,18 @@
+/* Example custom theme: warm sepia reading surface.
+   Install: copy into the app's themes folder
+   (<app data>/themes), then pick it under Plugins & appearance → Custom themes. */
+
+:root,
+[data-theme="light"] {
+  --chrome: #efe8dc;
+  --chrome-2: #e5dccd;
+  --chrome-3: #d9cfbe;
+  --page: #faf5ec;
+  --ink: #3a3128;
+  --ink-muted: #7d7264;
+  --ink-faint: #a99e8e;
+  --line: #ddd3c3;
+  --accent: #8a5a2b;
+  --pencil: #d9c39a;
+  --pencil-soft: #efe3cb;
+}
