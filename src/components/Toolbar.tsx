@@ -46,10 +46,15 @@ function Menu({
       {open && (
         <div
           role="menu"
+          // the titlebar is a "deep" drag region; the popup must not inherit it,
+          // or clicking its padding would drag the window instead of hitting an item
+          data-tauri-drag-region="false"
           style={{
             position: "absolute",
             top: "calc(100% + 4px)",
-            right: 0,
+            // anchored left: the button sits near the window's left edge, so a
+            // right-anchored popup would overflow off-screen
+            left: 0,
             minWidth: 180,
             background: "var(--page)",
             border: "1px solid var(--line)",
@@ -110,7 +115,7 @@ export default function Toolbar() {
   const dirty = activeTab ? activeTab.content !== activeTab.savedContent : false;
 
   return (
-    <header className="titlebar" data-tauri-drag-region>
+    <header className="titlebar" data-tauri-drag-region="deep">
       <button className="tool-btn" title="Toggle sidebar (⌘\)" onClick={toggleSidebar}>
         <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4">
           <rect x="1.5" y="2.5" width="13" height="11" rx="1.5" />
@@ -151,8 +156,8 @@ export default function Toolbar() {
         )}
       </Menu>
 
-      <div className="drag-region" data-tauri-drag-region>
-        <span className="doc-title" data-tauri-drag-region>
+      <div className="drag-region">
+        <span className="doc-title">
           {activeTab ? activeTab.title : ""}
           {dirty && <span className="edited-dot">•</span>}
         </span>
