@@ -18,5 +18,5 @@ mdeditor.registerCommand("reading-time", {
 
 // Stamp exported PDFs/HTML with a footer.
 mdeditor.transformMarkdownForExport(
-  (md) => md + "\n\n---\n\n*Exported from mdeditor*"
+  (md) => md + "\n\n---\n\n*Exported from MonkeyD*"
 );
