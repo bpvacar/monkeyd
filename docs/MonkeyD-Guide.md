@@ -94,6 +94,21 @@ Files are plain UTF-8 markdown — nothing proprietary is ever added to them.
 
 ***
 
+## 4b. Pasting images
+
+Copy a screenshot or photo, put the cursor where you want it, and press **⌘V**. MonkeyD writes the image to disk and inserts a normal markdown link — it never embeds a base64 blob in your note.
+
+* **Where it goes**: `<attachment folder>/Pasted image YYYYMMDDHHMMSS.png`, the same filename convention Obsidian uses. The folder is set in **⚲ → Attachments** (default `assets`).
+* **What it resolves against**: the open folder (⇧⌘O) when the document lives inside it, otherwise the document's own directory. A file opened from outside your workspace keeps its images next to itself rather than reaching into an unrelated folder.
+* **What gets written**: standard `![](relative/path.png)` — not `![[wikilinks]]` — so the note stays portable across Obsidian, GitHub, and pandoc.
+* Images display in the editor and in PDF export. The markdown on disk always keeps the relative path.
+
+Works in both rich text and source mode.
+
+> Heads-up: macOS puts photos on the clipboard at full resolution, so a phone photo can land as a 40 MB+ PNG. Consider downscaling before pasting if vault size matters.
+>
+> Undo (⌘Z) removes the link but not the file — an undone paste leaves the image behind in the attachment folder.
+
 ## 5. Export
 
 ### PDF (⌘P)

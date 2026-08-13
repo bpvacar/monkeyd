@@ -27,6 +27,7 @@ interface AppState {
   theme: ThemePref;
   userTheme: string | null;
   editorWidth: EditorWidth;
+  attachmentFolder: string;
   pluginsPanelOpen: boolean;
   toast: string | null;
 
@@ -44,6 +45,7 @@ interface AppState {
   setTheme: (t: ThemePref) => void;
   setUserTheme: (name: string | null) => void;
   setEditorWidth: (w: EditorWidth) => void;
+  setAttachmentFolder: (folder: string) => void;
   setPluginsPanelOpen: (open: boolean) => void;
   showToast: (msg: string) => void;
 }
@@ -56,6 +58,7 @@ export const useStore = create<AppState>((set, get) => ({
   theme: (localStorage.getItem("theme") as ThemePref) || "system",
   userTheme: localStorage.getItem("userTheme"),
   editorWidth: (localStorage.getItem("editorWidth") as EditorWidth) || "wide",
+  attachmentFolder: localStorage.getItem("attachmentFolder") ?? "assets",
   pluginsPanelOpen: false,
   toast: null,
 
@@ -177,6 +180,11 @@ export const useStore = create<AppState>((set, get) => ({
   setEditorWidth: (w) => {
     localStorage.setItem("editorWidth", w);
     set({ editorWidth: w });
+  },
+
+  setAttachmentFolder: (folder) => {
+    localStorage.setItem("attachmentFolder", folder);
+    set({ attachmentFolder: folder });
   },
 
   setPluginsPanelOpen: (open) => set({ pluginsPanelOpen: open }),

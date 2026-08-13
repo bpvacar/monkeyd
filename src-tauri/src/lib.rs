@@ -43,6 +43,16 @@ fn write_text_file(path: String, contents: String) -> Result<(), String> {
     fs::write(&path, contents).map_err(|e| e.to_string())
 }
 
+/// Writes raw bytes (pasted images and other attachments), creating the
+/// containing folder if it doesn't exist yet.
+#[tauri::command]
+fn write_binary_file(path: String, bytes: Vec<u8>) -> Result<(), String> {
+    if let Some(parent) = Path::new(&path).parent() {
+        fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+    }
+    fs::write(&path, &bytes).map_err(|e| e.to_string())
+}
+
 #[tauri::command]
 fn create_file(path: String) -> Result<(), String> {
     if Path::new(&path).exists() {
@@ -203,6 +213,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             read_text_file,
             write_text_file,
+            write_binary_file,
             create_file,
             list_dir,
             get_pending_files,

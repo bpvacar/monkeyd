@@ -18,6 +18,8 @@ export default function PluginsPanel() {
   const setUserTheme = useStore((s) => s.setUserTheme);
   const editorWidth = useStore((s) => s.editorWidth);
   const setEditorWidth = useStore((s) => s.setEditorWidth);
+  const attachmentFolder = useStore((s) => s.attachmentFolder);
+  const setAttachmentFolder = useStore((s) => s.setAttachmentFolder);
   const showToast = useStore((s) => s.showToast);
 
   const [plugins, setPlugins] = useState<LoadedPlugin[]>([]);
@@ -114,6 +116,23 @@ export default function PluginsPanel() {
               {editorWidth === w.id && <span className="check">✓</span>}
             </button>
           ))}
+
+          <div className="panel-section-label">Attachments</div>
+          <label className="setting-field">
+            <span>Folder for pasted images</span>
+            <input
+              type="text"
+              value={attachmentFolder}
+              placeholder="assets"
+              spellCheck={false}
+              onChange={(e) => setAttachmentFolder(e.target.value)}
+            />
+            <span className="setting-hint">
+              Relative to the open folder (or to the document, when no folder is
+              open). Images are saved as{" "}
+              <code>Pasted image YYYYMMDDHHMMSS.png</code>.
+            </span>
+          </label>
 
           <div className="panel-section-label">Plugins</div>
           {plugins.length === 0 ? (

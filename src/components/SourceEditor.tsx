@@ -6,6 +6,7 @@ import { markdown, markdownLanguage } from "@codemirror/lang-markdown";
 import { languages } from "@codemirror/language-data";
 import { syntaxHighlighting, HighlightStyle } from "@codemirror/language";
 import { tags } from "@lezer/highlight";
+import { imageFromClipboard, savePastedImage } from "../lib/attachments";
 
 const mdHighlight = HighlightStyle.define([
   { tag: tags.heading, fontWeight: "700", color: "var(--ink)" },
@@ -47,6 +48,24 @@ export default function SourceEditor({ initialContent, onChange }: Props) {
           markdown({ base: markdownLanguage, codeLanguages: languages }),
           syntaxHighlighting(mdHighlight),
           keymap.of([...defaultKeymap, ...historyKeymap, indentWithTab]),
+          // pasted images become files on disk plus a markdown link
+          EditorView.domEventHandlers({
+            paste(event, view) {
+              const file = imageFromClipboard(event.clipboardData);
+              if (!file) return false;
+              event.preventDefault();
+              savePastedImage(file).then((saved) => {
+                if (!saved) return;
+                const { from, to } = view.state.selection.main;
+                view.dispatch({
+                  changes: { from, to, insert: saved.markdown },
+                  selection: { anchor: from + saved.markdown.length },
+                });
+                view.focus();
+              });
+              return true;
+            },
+          }),
           EditorView.updateListener.of((u) => {
             if (u.docChanged) onChangeRef.current(u.state.doc.toString());
           }),

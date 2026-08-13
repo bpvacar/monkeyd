@@ -25,6 +25,9 @@ export const readTextFile = (path: string) =>
 export const writeTextFile = (path: string, contents: string) =>
   invoke<void>("write_text_file", { path, contents });
 
+export const writeBinaryFile = (path: string, bytes: number[]) =>
+  invoke<void>("write_binary_file", { path, bytes });
+
 export const createFile = (path: string) => invoke<void>("create_file", { path });
 
 export const listDir = (path: string) => invoke<DirEntry[]>("list_dir", { path });

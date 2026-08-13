@@ -8,6 +8,7 @@
 - **Workspace**: open a folder (`⇧⌘O`) for a sidebar file tree; multi-tab editing; autosave.
 - **Opens `.md` files from Finder** — the app registers as an editor for `.md`, `.markdown`, `.mdown`, `.mkd`.
 - **PDF export** (`⌘P`): renders the compiled document (GFM tables, task lists, syntax-highlighted code, KaTeX math) through the system print dialog — choose "Save as PDF". HTML export too.
+- **Paste images** (`⌘V`): screenshots and photos are written into a configurable attachment folder as `Pasted image YYYYMMDDHHMMSS.png` and linked with standard `![](relative/path)` — no base64 blobs, and portable to Obsidian.
 - **Adjustable writing width**: Narrow / Standard / Wide / Full, in the Plugins & appearance panel.
 - **Themes**: light / dark / match system, plus custom CSS themes dropped into `<app data>/themes/*.css`.
 - **Plugins**: JavaScript files in `<app data>/plugins/` (a `name.js` file, or a folder with `index.js` + optional `plugin.json`). See `examples/plugins/reading-time.js`.

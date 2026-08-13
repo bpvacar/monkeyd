@@ -4,6 +4,7 @@ import markedKatex from "marked-katex-extension";
 import hljs from "highlight.js";
 import "highlight.js/styles/github.css";
 import "katex/dist/katex.min.css";
+import { resolveImageSrc } from "./attachments";
 
 const marked = new Marked(
   markedHighlight({
@@ -42,6 +43,10 @@ export function exportToPdf(markdown: string) {
   const mount = document.getElementById("print-mount");
   if (!mount) return;
   mount.innerHTML = renderMarkdown(applyTransforms(markdown));
+  // local images are relative to the document; the print view needs real URLs
+  mount.querySelectorAll("img").forEach((img) => {
+    img.setAttribute("src", resolveImageSrc(img.getAttribute("src") ?? ""));
+  });
   // let the DOM/styles settle before invoking print
   requestAnimationFrame(async () => {
     try {
