@@ -53,6 +53,174 @@ fn write_binary_file(path: String, bytes: Vec<u8>) -> Result<(), String> {
     fs::write(&path, &bytes).map_err(|e| e.to_string())
 }
 
+#[derive(Serialize)]
+struct OrphanFile {
+    path: String,
+    name: String,
+    size: u64,
+}
+
+const IMAGE_EXTS: [&str; 8] = ["png", "jpg", "jpeg", "gif", "webp", "svg", "avif", "heic"];
+
+fn collect_files(dir: &Path, out: &mut Vec<std::path::PathBuf>) {
+    let Ok(entries) = fs::read_dir(dir) else { return };
+    for entry in entries.filter_map(|e| e.ok()) {
+        let p = entry.path();
+        let hidden = p
+            .file_name()
+            .map(|n| n.to_string_lossy().starts_with('.'))
+            .unwrap_or(false);
+        if hidden {
+            continue;
+        }
+        if p.is_dir() {
+            collect_files(&p, out);
+        } else {
+            out.push(p);
+        }
+    }
+}
+
+/// Resolves `..`/`.` without touching the filesystem.
+fn normalize(path: &Path) -> String {
+    let mut parts: Vec<String> = Vec::new();
+    for comp in path.to_string_lossy().split('/') {
+        match comp {
+            "" | "." => {}
+            ".." => {
+                parts.pop();
+            }
+            other => parts.push(other.to_string()),
+        }
+    }
+    format!("/{}", parts.join("/"))
+}
+
+fn percent_decode(s: &str) -> String {
+    let bytes = s.as_bytes();
+    let mut out: Vec<u8> = Vec::with_capacity(bytes.len());
+    let mut i = 0;
+    while i < bytes.len() {
+        if bytes[i] == b'%' && i + 2 < bytes.len() {
+            if let Ok(b) = u8::from_str_radix(&s[i + 1..i + 3], 16) {
+                out.push(b);
+                i += 3;
+                continue;
+            }
+        }
+        out.push(bytes[i]);
+        i += 1;
+    }
+    String::from_utf8_lossy(&out).into_owned()
+}
+
+/// Images in the attachment folder that no markdown file in the workspace
+/// links to. Deliberately conservative: anything referenced by full path *or*
+/// by bare filename (Obsidian `![[wikilinks]]`) counts as used.
+#[tauri::command]
+fn find_orphan_attachments(root: String, folder: String) -> Result<Vec<OrphanFile>, String> {
+    let root_path = Path::new(&root);
+    let attach_dir = if folder.trim_matches('/').is_empty() {
+        root_path.to_path_buf()
+    } else {
+        root_path.join(folder.trim_matches('/'))
+    };
+    if !attach_dir.is_dir() {
+        return Ok(Vec::new());
+    }
+
+    let mut all: Vec<std::path::PathBuf> = Vec::new();
+    collect_files(root_path, &mut all);
+
+    // ](target) · ](<target with spaces>) · [[target]] · src="target"
+    let link_re =
+        regex::Regex::new(r#"\]\(\s*(?:<([^>]+)>|([^)\s]+))"#).map_err(|e| e.to_string())?;
+    let wiki_re = regex::Regex::new(r"\[\[([^\]|#]+)").map_err(|e| e.to_string())?;
+    let html_re = regex::Regex::new(r#"src\s*=\s*["']([^"']+)"#).map_err(|e| e.to_string())?;
+
+    let mut used_paths: std::collections::HashSet<String> = Default::default();
+    let mut used_names: std::collections::HashSet<String> = Default::default();
+
+    for md in all.iter().filter(|p| {
+        p.extension()
+            .map(|e| {
+                let e = e.to_string_lossy().to_lowercase();
+                e == "md" || e == "markdown" || e == "mdown" || e == "mkd"
+            })
+            .unwrap_or(false)
+    }) {
+        let Ok(text) = fs::read_to_string(md) else { continue };
+        let base = md.parent().unwrap_or(root_path);
+        let mut targets: Vec<String> = Vec::new();
+        for c in link_re.captures_iter(&text) {
+            // group 1 is the <angle-bracketed> form, group 2 the plain one
+            if let Some(m) = c.get(1).or_else(|| c.get(2)) {
+                targets.push(m.as_str().to_string());
+            }
+        }
+        for c in html_re.captures_iter(&text) {
+            targets.push(c[1].to_string());
+        }
+        for c in wiki_re.captures_iter(&text) {
+            // wikilinks may be a bare name or carry a folder; record both so
+            // neither shape looks unreferenced
+            let target = percent_decode(c[1].trim());
+            if let Some(name) = Path::new(&target).file_name() {
+                used_names.insert(name.to_string_lossy().into_owned());
+            }
+            used_names.insert(target);
+        }
+        for t in targets {
+            let decoded = percent_decode(t.trim());
+            if decoded.contains("://") || decoded.starts_with("data:") {
+                continue;
+            }
+            if let Some(name) = Path::new(&decoded).file_name() {
+                used_names.insert(name.to_string_lossy().into_owned());
+            }
+            let abs = if decoded.starts_with('/') {
+                std::path::PathBuf::from(&decoded)
+            } else {
+                base.join(&decoded)
+            };
+            used_paths.insert(normalize(&abs));
+        }
+    }
+
+    let mut attachments: Vec<std::path::PathBuf> = Vec::new();
+    collect_files(&attach_dir, &mut attachments);
+
+    let mut orphans: Vec<OrphanFile> = attachments
+        .into_iter()
+        .filter(|p| {
+            p.extension()
+                .map(|e| IMAGE_EXTS.contains(&e.to_string_lossy().to_lowercase().as_str()))
+                .unwrap_or(false)
+        })
+        .filter(|p| {
+            let name = p.file_name().map(|n| n.to_string_lossy().into_owned());
+            !used_paths.contains(&normalize(p))
+                && !name.map(|n| used_names.contains(&n)).unwrap_or(false)
+        })
+        .map(|p| OrphanFile {
+            size: fs::metadata(&p).map(|m| m.len()).unwrap_or(0),
+            name: p
+                .file_name()
+                .map(|n| n.to_string_lossy().into_owned())
+                .unwrap_or_default(),
+            path: p.to_string_lossy().into_owned(),
+        })
+        .collect();
+    orphans.sort_by(|a, b| b.size.cmp(&a.size));
+    Ok(orphans)
+}
+
+/// Moves files to the system Trash, so a mistaken cleanup stays recoverable.
+#[tauri::command]
+fn trash_files(paths: Vec<String>) -> Result<(), String> {
+    trash::delete_all(&paths).map_err(|e| e.to_string())
+}
+
 #[tauri::command]
 fn create_file(path: String) -> Result<(), String> {
     if Path::new(&path).exists() {
@@ -214,6 +382,8 @@ pub fn run() {
             read_text_file,
             write_text_file,
             write_binary_file,
+            find_orphan_attachments,
+            trash_files,
             create_file,
             list_dir,
             get_pending_files,
@@ -243,4 +413,89 @@ pub fn run() {
                 queue_and_notify(app, paths);
             }
         });
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Removes the temp vault even if an assertion fails.
+    struct TempVault(std::path::PathBuf);
+    impl Drop for TempVault {
+        fn drop(&mut self) {
+            let _ = fs::remove_dir_all(&self.0);
+        }
+    }
+
+    fn put(path: &Path, contents: &str) {
+        fs::create_dir_all(path.parent().unwrap()).unwrap();
+        fs::write(path, contents).unwrap();
+    }
+
+    fn orphan_names(root: &Path) -> Vec<String> {
+        let mut names =
+            find_orphan_attachments(root.to_string_lossy().into(), "assets".into())
+                .unwrap()
+                .into_iter()
+                .map(|o| o.name)
+                .collect::<Vec<_>>();
+        names.sort();
+        names
+    }
+
+    #[test]
+    fn reports_only_images_no_note_links_to() {
+        let root = std::env::temp_dir().join(format!("monkeyd-orphans-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&root);
+        let _guard = TempVault(root.clone());
+
+        for name in [
+            "rel.png",
+            "wiki.png",
+            "wiki-in-folder.png",
+            "html.png",
+            "updir.png",
+            "angle brackets.png",
+            "Pasted image 20260101010101.png",
+            "unused.png",
+        ] {
+            put(&root.join("assets").join(name), "x");
+        }
+
+        // every shape a link can take in the wild
+        put(
+            &root.join("notas/a.md"),
+            "![](../assets/rel.png)\n\
+             ![](../assets/Pasted%20image%2020260101010101.png)\n\
+             ![](<../assets/angle brackets.png>)\n\
+             <img src=\"../assets/html.png\">\n",
+        );
+        put(&root.join("notas/b.md"), "![[wiki.png]]\n![[assets/wiki-in-folder.png|300]]\n");
+        put(&root.join("notas/sub/c.md"), "![](../../assets/updir.png)\n");
+
+        assert_eq!(
+            orphan_names(&root),
+            vec!["unused.png"],
+            "only the genuinely unreferenced image should be reported"
+        );
+    }
+
+    #[test]
+    fn trashes_files_without_destroying_them() {
+        let f = std::env::temp_dir()
+            .join(format!("monkeyd-trash-probe-{}.png", std::process::id()));
+        fs::write(&f, "x").unwrap();
+        assert!(f.exists());
+        trash_files(vec![f.to_string_lossy().into()]).unwrap();
+        assert!(!f.exists(), "file should be gone from its original path");
+    }
+
+    #[test]
+    fn reports_nothing_when_the_folder_is_missing() {
+        let root = std::env::temp_dir().join(format!("monkeyd-noattach-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&root);
+        let _guard = TempVault(root.clone());
+        put(&root.join("notas/a.md"), "# no images here\n");
+        assert!(orphan_names(&root).is_empty());
+    }
 }

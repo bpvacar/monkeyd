@@ -28,6 +28,18 @@ export const writeTextFile = (path: string, contents: string) =>
 export const writeBinaryFile = (path: string, bytes: number[]) =>
   invoke<void>("write_binary_file", { path, bytes });
 
+export interface OrphanFile {
+  path: string;
+  name: string;
+  size: number;
+}
+
+export const findOrphanAttachments = (root: string, folder: string) =>
+  invoke<OrphanFile[]>("find_orphan_attachments", { root, folder });
+
+export const trashFiles = (paths: string[]) =>
+  invoke<void>("trash_files", { paths });
+
 export const createFile = (path: string) => invoke<void>("create_file", { path });
 
 export const listDir = (path: string) => invoke<DirEntry[]>("list_dir", { path });

@@ -136,6 +136,10 @@ function useShortcuts() {
       } else if (k === "\\") {
         e.preventDefault();
         s.toggleSidebar();
+      } else if (k === ",") {
+        // the macOS convention for settings
+        e.preventDefault();
+        s.setPluginsPanelOpen(!s.pluginsPanelOpen);
       }
     };
     window.addEventListener("keydown", onKey);

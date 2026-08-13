@@ -61,6 +61,70 @@ function extensionFor(mime: string): string {
   return sub === "jpeg" ? "jpg" : sub;
 }
 
+interface Encoded {
+  bytes: number[];
+  ext: string;
+}
+
+const toBytes = async (blob: Blob): Promise<number[]> =>
+  Array.from(new Uint8Array(await blob.arrayBuffer()));
+
+/** True if any sampled pixel is not fully opaque. */
+function hasTransparency(ctx: CanvasRenderingContext2D, w: number, h: number) {
+  const { data } = ctx.getImageData(0, 0, w, h);
+  for (let i = 3; i < data.length; i += 4 * 16) {
+    if (data[i] < 255) return true;
+  }
+  return false;
+}
+
+/**
+ * macOS puts photos on the clipboard at full resolution — a phone photo lands
+ * as a 40 MB+ PNG. Anything above `maxEdge` is scaled down and re-encoded as
+ * JPEG (PNG when it has transparency, which JPEG can't carry). Images that
+ * already fit are stored byte-for-byte, so screenshots stay lossless.
+ */
+async function encodeForDisk(file: File, maxEdge: number): Promise<Encoded> {
+  const fallback = async (): Promise<Encoded> => ({
+    bytes: await toBytes(file),
+    ext: extensionFor(file.type),
+  });
+  if (!maxEdge || file.type === "image/svg+xml") return fallback();
+
+  let bitmap: ImageBitmap;
+  try {
+    bitmap = await createImageBitmap(file);
+  } catch {
+    return fallback();
+  }
+  const longest = Math.max(bitmap.width, bitmap.height);
+  if (longest <= maxEdge) {
+    bitmap.close();
+    return fallback();
+  }
+
+  const scale = maxEdge / longest;
+  const w = Math.max(1, Math.round(bitmap.width * scale));
+  const h = Math.max(1, Math.round(bitmap.height * scale));
+  const canvas = document.createElement("canvas");
+  canvas.width = w;
+  canvas.height = h;
+  const ctx = canvas.getContext("2d", { willReadFrequently: true });
+  if (!ctx) {
+    bitmap.close();
+    return fallback();
+  }
+  ctx.drawImage(bitmap, 0, 0, w, h);
+  bitmap.close();
+
+  const png = hasTransparency(ctx, w, h);
+  const blob = await new Promise<Blob | null>((resolve) =>
+    canvas.toBlob(resolve, png ? "image/png" : "image/jpeg", 0.85)
+  );
+  if (!blob) return fallback();
+  return { bytes: await toBytes(blob), ext: png ? "png" : "jpg" };
+}
+
 /** Returns the first image in a clipboard payload, or null if there is none. */
 export function imageFromClipboard(data: DataTransfer | null): File | null {
   if (!data) return null;
@@ -110,11 +174,12 @@ export async function savePastedImage(
   }
 
   const folder = s.attachmentFolder.replace(/^\/+|\/+$/g, "");
-  const name = `Pasted image ${stamp()}.${extensionFor(file.type)}`;
-  const absPath = folder ? `${base}/${folder}/${name}` : `${base}/${name}`;
-
+  let absPath: string;
+  let name: string;
   try {
-    const bytes = Array.from(new Uint8Array(await file.arrayBuffer()));
+    const { bytes, ext } = await encodeForDisk(file, s.imageMaxEdge);
+    name = `Pasted image ${stamp()}.${ext}`;
+    absPath = folder ? `${base}/${folder}/${name}` : `${base}/${name}`;
     await writeBinaryFile(absPath, bytes);
   } catch (e) {
     s.showToast(`Couldn't save image: ${e}`);

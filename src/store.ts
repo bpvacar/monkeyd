@@ -28,6 +28,7 @@ interface AppState {
   userTheme: string | null;
   editorWidth: EditorWidth;
   attachmentFolder: string;
+  imageMaxEdge: number;
   pluginsPanelOpen: boolean;
   toast: string | null;
 
@@ -46,6 +47,7 @@ interface AppState {
   setUserTheme: (name: string | null) => void;
   setEditorWidth: (w: EditorWidth) => void;
   setAttachmentFolder: (folder: string) => void;
+  setImageMaxEdge: (px: number) => void;
   setPluginsPanelOpen: (open: boolean) => void;
   showToast: (msg: string) => void;
 }
@@ -59,6 +61,7 @@ export const useStore = create<AppState>((set, get) => ({
   userTheme: localStorage.getItem("userTheme"),
   editorWidth: (localStorage.getItem("editorWidth") as EditorWidth) || "wide",
   attachmentFolder: localStorage.getItem("attachmentFolder") ?? "assets",
+  imageMaxEdge: Number(localStorage.getItem("imageMaxEdge") ?? 2560),
   pluginsPanelOpen: false,
   toast: null,
 
@@ -185,6 +188,11 @@ export const useStore = create<AppState>((set, get) => ({
   setAttachmentFolder: (folder) => {
     localStorage.setItem("attachmentFolder", folder);
     set({ attachmentFolder: folder });
+  },
+
+  setImageMaxEdge: (px) => {
+    localStorage.setItem("imageMaxEdge", String(px));
+    set({ imageMaxEdge: px });
   },
 
   setPluginsPanelOpen: (open) => set({ pluginsPanelOpen: open }),
