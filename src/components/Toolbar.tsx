@@ -5,6 +5,11 @@ import {
   saveActiveTab,
   exportActivePdf,
   exportActiveHtml,
+  newFileIn,
+  newFolderIn,
+  renameEntry,
+  trashEntry,
+  revealEntry,
 } from "../lib/fileops";
 import { useState, useRef, useEffect } from "react";
 
@@ -109,6 +114,8 @@ function MenuItem({
 
 export default function Toolbar() {
   const activeTab = useStore((s) => s.activeTab());
+  const workspace = useStore((s) => s.workspace);
+  const activePath = activeTab?.path ?? null;
   const setMode = useStore((s) => s.setMode);
   const toggleSidebar = useStore((s) => s.toggleSidebar);
   const setPluginsPanelOpen = useStore((s) => s.setPluginsPanelOpen);
@@ -135,14 +142,24 @@ export default function Toolbar() {
         {(close) => (
           <>
             <MenuItem onClick={() => { useStore.getState().newTab(); close(); }} shortcut="⌘N">
-              New file
+              New tab
             </MenuItem>
+            {workspace && (
+              <MenuItem onClick={() => { newFileIn(workspace); close(); }} shortcut="⇧⌘N">
+                New file…
+              </MenuItem>
+            )}
             <MenuItem onClick={() => { openFileDialog(); close(); }} shortcut="⌘O">
               Open file…
             </MenuItem>
             <MenuItem onClick={() => { openFolderDialog(); close(); }} shortcut="⇧⌘O">
               Open folder…
             </MenuItem>
+            {workspace && (
+              <MenuItem onClick={() => { newFolderIn(workspace); close(); }}>
+                New folder…
+              </MenuItem>
+            )}
             <MenuItem onClick={() => { saveActiveTab(); close(); }} shortcut="⌘S">
               Save
             </MenuItem>
@@ -152,6 +169,19 @@ export default function Toolbar() {
             <MenuItem onClick={() => { exportActiveHtml(); close(); }}>
               Export as HTML…
             </MenuItem>
+            {activePath && (
+              <>
+                <MenuItem onClick={() => { renameEntry(activePath); close(); }}>
+                  Rename…
+                </MenuItem>
+                <MenuItem onClick={() => { revealEntry(activePath); close(); }}>
+                  Reveal in Finder
+                </MenuItem>
+                <MenuItem onClick={() => { trashEntry(activePath); close(); }}>
+                  Move to Trash
+                </MenuItem>
+              </>
+            )}
           </>
         )}
       </Menu>

@@ -1,4 +1,12 @@
-import { useStore } from "../store";
+import { useStore, type Tab } from "../store";
+import {
+  renameEntry,
+  trashEntry,
+  revealEntry,
+  duplicateEntry,
+  saveActiveTab,
+} from "../lib/fileops";
+import ContextMenu, { useContextMenu, type MenuItem } from "./ContextMenu";
 
 export default function TabBar() {
   const tabs = useStore((s) => s.tabs);
@@ -6,8 +14,49 @@ export default function TabBar() {
   const setActive = useStore((s) => s.setActive);
   const closeTab = useStore((s) => s.closeTab);
   const newTab = useStore((s) => s.newTab);
+  const { menu, openMenu, closeMenu } = useContextMenu();
 
   if (tabs.length === 0) return null;
+
+  const tabMenu = (e: React.MouseEvent, tab: Tab) => {
+    const onDisk = tab.path;
+    const items: MenuItem[] = [
+      {
+        label: onDisk ? "Rename…" : "Save as…",
+        onSelect: () => (onDisk ? renameEntry(onDisk) : saveActiveTab()),
+      },
+      {
+        label: "Duplicate",
+        disabled: !onDisk,
+        onSelect: () => onDisk && duplicateEntry(onDisk),
+      },
+      {
+        label: "Reveal in Finder",
+        disabled: !onDisk,
+        onSelect: () => onDisk && revealEntry(onDisk),
+      },
+      {
+        label: "Close",
+        dividerBefore: true,
+        onSelect: () => closeTab(tab.id),
+      },
+      {
+        label: "Close others",
+        disabled: tabs.length < 2,
+        onSelect: () => {
+          for (const t of tabs) if (t.id !== tab.id) closeTab(t.id);
+        },
+      },
+      {
+        label: "Move to Trash",
+        danger: true,
+        disabled: !onDisk,
+        dividerBefore: true,
+        onSelect: () => onDisk && trashEntry(onDisk),
+      },
+    ];
+    openMenu(e, items);
+  };
 
   return (
     <div className="tabbar">
@@ -18,6 +67,10 @@ export default function TabBar() {
             key={t.id}
             className={`tab ${t.id === activeTabId ? "active" : ""}`}
             onClick={() => setActive(t.id)}
+            onContextMenu={(e) => {
+              setActive(t.id);
+              tabMenu(e, t);
+            }}
             onAuxClick={(e) => {
               if (e.button === 1) closeTab(t.id);
             }}
@@ -43,6 +96,7 @@ export default function TabBar() {
       <button className="tab-new" title="New tab (⌘N)" onClick={() => newTab()}>
         +
       </button>
+      <ContextMenu menu={menu} onClose={closeMenu} />
     </div>
   );
 }

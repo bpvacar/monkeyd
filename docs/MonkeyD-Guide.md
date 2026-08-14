@@ -52,11 +52,27 @@ With no document open you'll see the **Start writing** screen with the same thre
 
 ### The sidebar (workspace)
 
-Open a folder (⇧⌘O) and the sidebar shows its file tree: markdown files and subfolders. Click a file to open it in a tab. The header has two small buttons: **New file in folder** (creates `Untitled.md`-style files directly in the workspace) and **Refresh**.
+Open a folder (⇧⌘O) and the sidebar shows its file tree: markdown files and subfolders. Click a file to open it in a tab. The header has three buttons: **New file**, **New folder**, and **Refresh**.
+
+**Right-click anything** in the tree for file management:
+
+| Action | Notes |
+|---|---|
+| New file… / New folder… | Created inside the folder you clicked (or alongside the file) |
+| Rename… | Keeps the extension if you leave it off, so a note stays markdown |
+| Duplicate | Files only; makes `note copy.md` |
+| Reveal in Finder | |
+| Move to Trash | Recoverable — never a hard delete |
+
+Right-clicking empty space in the tree acts on the workspace root.
+
+Open tabs follow along: renaming a file (or a folder above it) updates the tab, and trashing something closes its tab instead of leaving it pointing at a file that's gone.
 
 ### Tabs
 
-Every document is a tab. **⌘N** makes a new untitled tab, **⌘W** closes the active one, **+** in the tab bar creates one too. Each tab remembers its own editing mode.
+Every document is a tab. **⌘N** makes a new untitled tab, **⇧⌘N** creates a named file in the open folder, **⌘W** closes the active one, and **+** in the tab bar adds one. Each tab remembers its own editing mode.
+
+**Right-click a tab** for Rename…, Duplicate, Reveal in Finder, Close, Close others, and Move to Trash.
 
 ***
 
