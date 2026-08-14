@@ -5,6 +5,16 @@ export type ViewMode = "wysiwyg" | "source";
 export type ThemePref = "system" | "light" | "dark";
 export type EditorWidth = "narrow" | "standard" | "wide" | "full";
 
+export interface PromptRequest {
+  title: string;
+  label: string;
+  initial: string;
+  confirmLabel?: string;
+  /** Selects everything before the extension, the way Finder does. */
+  selectBasename?: boolean;
+  resolve: (value: string | null) => void;
+}
+
 export interface Tab {
   id: string;
   path: string | null;
@@ -31,6 +41,8 @@ interface AppState {
   imageMaxEdge: number;
   pluginsPanelOpen: boolean;
   toast: string | null;
+  prompt: PromptRequest | null;
+  treeVersion: number;
 
   activeTab: () => Tab | null;
   newTab: (content?: string) => void;
@@ -50,6 +62,11 @@ interface AppState {
   setImageMaxEdge: (px: number) => void;
   setPluginsPanelOpen: (open: boolean) => void;
   showToast: (msg: string) => void;
+  askName: (opts: Omit<PromptRequest, "resolve">) => Promise<string | null>;
+  resolvePrompt: (value: string | null) => void;
+  pathRenamed: (from: string, to: string) => void;
+  pathRemoved: (path: string) => void;
+  refreshTree: () => void;
 }
 
 export const useStore = create<AppState>((set, get) => ({
@@ -64,6 +81,8 @@ export const useStore = create<AppState>((set, get) => ({
   imageMaxEdge: Number(localStorage.getItem("imageMaxEdge") ?? 2560),
   pluginsPanelOpen: false,
   toast: null,
+  prompt: null,
+  treeVersion: 0,
 
   activeTab: () => {
     const { tabs, activeTabId } = get();
@@ -196,6 +215,50 @@ export const useStore = create<AppState>((set, get) => ({
   },
 
   setPluginsPanelOpen: (open) => set({ pluginsPanelOpen: open }),
+
+  askName: (opts) =>
+    new Promise<string | null>((resolve) => {
+      set({ prompt: { ...opts, resolve } });
+    }),
+
+  resolvePrompt: (value) => {
+    const p = get().prompt;
+    set({ prompt: null });
+    p?.resolve(value);
+  },
+
+  /**
+   * A file or folder moved on disk. Retarget any tab pointing at it — and,
+   * when a folder moved, every tab for a file underneath it.
+   */
+  pathRenamed: (from, to) =>
+    set((s) => ({
+      tabs: s.tabs.map((t) => {
+        if (!t.path) return t;
+        if (t.path === from) return { ...t, path: to, title: fileName(to) };
+        if (t.path.startsWith(`${from}/`)) {
+          const moved = to + t.path.slice(from.length);
+          return { ...t, path: moved, title: fileName(moved) };
+        }
+        return t;
+      }),
+    })),
+
+  /** A file or folder is gone; drop its tabs without prompting to save. */
+  pathRemoved: (path) =>
+    set((s) => {
+      const gone = (p: string | null) =>
+        p != null && (p === path || p.startsWith(`${path}/`));
+      const tabs = s.tabs.filter((t) => !gone(t.path));
+      if (tabs.length === s.tabs.length) return {};
+      const stillThere = tabs.some((t) => t.id === s.activeTabId);
+      return {
+        tabs,
+        activeTabId: stillThere ? s.activeTabId : tabs[tabs.length - 1]?.id ?? null,
+      };
+    }),
+
+  refreshTree: () => set((s) => ({ treeVersion: s.treeVersion + 1 })),
 
   showToast: (msg) => {
     set({ toast: msg });

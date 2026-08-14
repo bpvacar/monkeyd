@@ -229,6 +229,37 @@ fn create_file(path: String) -> Result<(), String> {
     fs::write(&path, "").map_err(|e| e.to_string())
 }
 
+/// Renames or moves a file/folder. Refuses to clobber an existing entry.
+#[tauri::command]
+fn rename_path(from: String, to: String) -> Result<(), String> {
+    if from == to {
+        return Ok(());
+    }
+    if Path::new(&to).exists() {
+        return Err("Something with that name already exists".into());
+    }
+    if let Some(parent) = Path::new(&to).parent() {
+        fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+    }
+    fs::rename(&from, &to).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn create_folder(path: String) -> Result<(), String> {
+    if Path::new(&path).exists() {
+        return Err("A folder with that name already exists".into());
+    }
+    fs::create_dir_all(&path).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn copy_file(from: String, to: String) -> Result<(), String> {
+    if Path::new(&to).exists() {
+        return Err("Something with that name already exists".into());
+    }
+    fs::copy(&from, &to).map(|_| ()).map_err(|e| e.to_string())
+}
+
 #[tauri::command]
 fn list_dir(path: String) -> Result<Vec<DirEntry>, String> {
     let mut entries: Vec<DirEntry> = fs::read_dir(&path)
@@ -385,6 +416,9 @@ pub fn run() {
             find_orphan_attachments,
             trash_files,
             create_file,
+            rename_path,
+            create_folder,
+            copy_file,
             list_dir,
             get_pending_files,
             print_window,

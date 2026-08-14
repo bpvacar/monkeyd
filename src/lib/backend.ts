@@ -42,6 +42,15 @@ export const trashFiles = (paths: string[]) =>
 
 export const createFile = (path: string) => invoke<void>("create_file", { path });
 
+export const renamePath = (from: string, to: string) =>
+  invoke<void>("rename_path", { from, to });
+
+export const createFolder = (path: string) =>
+  invoke<void>("create_folder", { path });
+
+export const copyFile = (from: string, to: string) =>
+  invoke<void>("copy_file", { from, to });
+
 export const listDir = (path: string) => invoke<DirEntry[]>("list_dir", { path });
 
 export const getPendingFiles = () => invoke<string[]>("get_pending_files");

@@ -2,7 +2,13 @@ import { useCallback, useEffect, useState } from "react";
 import { listen } from "@tauri-apps/api/event";
 import { useStore } from "./store";
 import { getPendingFiles, loadUserThemes } from "./lib/backend";
-import { saveActiveTab, openFileDialog, openFolderDialog, exportActivePdf } from "./lib/fileops";
+import {
+  saveActiveTab,
+  openFileDialog,
+  openFolderDialog,
+  exportActivePdf,
+  newFileIn,
+} from "./lib/fileops";
 import { initPlugins, notifyFileOpen } from "./plugins/runtime";
 import Toolbar from "./components/Toolbar";
 import Sidebar from "./components/Sidebar";
@@ -10,6 +16,7 @@ import TabBar from "./components/TabBar";
 import StatusBar from "./components/StatusBar";
 import Welcome from "./components/Welcome";
 import PluginsPanel from "./components/PluginsPanel";
+import PromptDialog from "./components/PromptDialog";
 import WysiwygEditor from "./components/WysiwygEditor";
 import SourceEditor from "./components/SourceEditor";
 import welcomeDoc from "./welcome.md?raw";
@@ -114,6 +121,11 @@ function useShortcuts() {
       if (k === "s") {
         e.preventDefault();
         saveActiveTab();
+      } else if (k === "n" && e.shiftKey) {
+        // a real file in the workspace, named; plain ⌘N stays a scratch tab
+        e.preventDefault();
+        if (s.workspace) newFileIn(s.workspace);
+        else s.newTab();
       } else if (k === "n") {
         e.preventDefault();
         s.newTab();
@@ -227,6 +239,7 @@ export default function App() {
       </div>
       <StatusBar />
       <PluginsPanel />
+      <PromptDialog />
       {toast && <div className="toast">{toast}</div>}
     </div>
   );
