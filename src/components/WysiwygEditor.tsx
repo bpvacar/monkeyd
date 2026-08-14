@@ -9,6 +9,7 @@ import {
   savePastedImage,
 } from "../lib/attachments";
 import { frontmatter } from "../plugins/frontmatter";
+import { wikilink } from "../plugins/wikilink";
 
 interface Props {
   /** Content the editor was mounted with; changes remount via key upstream. */
@@ -33,8 +34,10 @@ export default function WysiwygEditor({ initialContent, onChange }: Props) {
         [Crepe.Feature.ImageBlock]: { proxyDomURL: resolveImageSrc },
       },
     });
-    // YAML front matter must round-trip untouched — see plugins/frontmatter.ts
+    // Front matter and wiki links must round-trip untouched — without these,
+    // saving a note rewrites its metadata and escapes every [[link]].
     crepe.editor.use(frontmatter);
+    crepe.editor.use(wikilink);
 
     crepe.on((listener) => {
       listener.markdownUpdated((_ctx, markdown, prev) => {

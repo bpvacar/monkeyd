@@ -699,3 +699,15 @@ button:focus-visible, [tabindex]:focus-visible {
 @media print {
   .frontmatter { display: none; }
 }
+
+/* ── Wiki links ──────────────────────────────────────────────────────────── */
+/* Brackets stay visible: what's on screen matches what's in the file, and
+   MonkeyD doesn't resolve these, so it shouldn't pretend they're live links. */
+.wikilink {
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+  border-radius: 3px;
+  padding: 0 .15em;
+  white-space: nowrap;
+  cursor: default;
+}
