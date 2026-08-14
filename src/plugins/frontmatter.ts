@@ -15,10 +15,17 @@
 import { $node, $remark } from "@milkdown/kit/utils";
 import remarkFrontmatter from "remark-frontmatter";
 
-/** Parses `---\n…\n---` at the top of a document into a `yaml` mdast node. */
+/**
+ * Parses `---\n…\n---` at the top of a document into a `yaml` mdast node.
+ *
+ * The `["yaml"]` preset is required, not cosmetic: `$remark` hands the plugin
+ * its options object, which defaults to `{}`, and remark-frontmatter reads a
+ * bare `{}` as a matter descriptor with no `type` and throws on load.
+ */
 export const remarkFrontmatterPlugin = $remark(
   "remarkFrontmatter",
-  () => remarkFrontmatter
+  () => remarkFrontmatter,
+  ["yaml"]
 );
 
 /**

@@ -665,3 +665,37 @@ button:focus-visible, [tabindex]:focus-visible {
 }
 
 @page { margin: 20mm 18mm; }
+
+/* ── YAML front matter ───────────────────────────────────────────────────── */
+/* Metadata, not prose: monospaced, muted, and visually parked above the
+   document instead of competing with the first heading. */
+.frontmatter {
+  font-family: var(--font-mono);
+  font-size: .78rem;
+  line-height: 1.55;
+  color: var(--ink-muted);
+  background: color-mix(in srgb, var(--chrome) 55%, transparent);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: .6rem .8rem;
+  margin: 0 0 1.4rem;
+  white-space: pre-wrap;
+  word-break: break-word;
+  tab-size: 2;
+}
+
+.frontmatter::before {
+  content: "front matter";
+  display: block;
+  font-family: var(--font-ui);
+  font-size: .62rem;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  margin-bottom: .35rem;
+  user-select: none;
+}
+
+@media print {
+  .frontmatter { display: none; }
+}
