@@ -33,6 +33,9 @@ export default function WysiwygEditor({ initialContent, onChange }: Props) {
         [Crepe.Feature.ImageBlock]: { proxyDomURL: resolveImageSrc },
       },
     });
+    // YAML front matter must round-trip untouched — see plugins/frontmatter.ts
+    crepe.editor.use(frontmatter);
+
     crepe.on((listener) => {
       listener.markdownUpdated((_ctx, markdown, prev) => {
         if (markdown !== prev) onChangeRef.current(markdown);
