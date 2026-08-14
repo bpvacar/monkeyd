@@ -1,7 +1,7 @@
 {
   "name": "monkeyd",
   "private": true,
-  "version": "0.1.1",
+  "version": "0.1.2",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -33,6 +33,7 @@
     "marked-katex-extension": "^5.1.10",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
+    "remark-frontmatter": "^5.0.0",
     "zustand": "^5.0.14"
   },
   "devDependencies": {

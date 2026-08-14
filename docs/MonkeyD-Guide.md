@@ -105,9 +105,26 @@ Copy a screenshot or photo, put the cursor where you want it, and press **⌘V**
 
 Works in both rich text and source mode.
 
-> Heads-up: macOS puts photos on the clipboard at full resolution, so a phone photo can land as a 40 MB+ PNG. Consider downscaling before pasting if vault size matters.
->
-> Undo (⌘Z) removes the link but not the file — an undone paste leaves the image behind in the attachment folder.
+### Image size
+
+macOS puts photos on the clipboard at **full resolution** — a phone photo of a whiteboard arrives as a 40 MB+ PNG. **⚲ → Pasted image size** controls what gets stored:
+
+| Setting | Longest edge |
+|---|---|
+| Original | untouched |
+| **Large** (default) | 2560 px |
+| Medium | 1920 px |
+| Small | 1280 px |
+
+Oversized images are scaled down and saved as JPEG (PNG if they carry transparency, which JPEG can't). Anything already within the limit is written byte-for-byte, so screenshots stay lossless. In practice a 42 MB photo lands as about 1 MB.
+
+### Cleaning up unused images
+
+Undo (⌘Z) removes the link but can't unwrite the file, so an undone paste leaves an image nothing points at. Deleted notes leave the same trail.
+
+**⚲ → Unused images → Find unused images…** scans every note in the open folder and lists images in the attachment folder that nothing links to, with their sizes. Tick the ones you want gone and they're **moved to the Trash** — never hard-deleted, so a mistake is recoverable.
+
+The scan is deliberately cautious: an image counts as used if any note references it by path *or* by bare filename, so Obsidian-style `![[wikilinks]]`, `<img>` tags, `%20`-encoded paths, and `../` links all keep their images safe.
 
 ## 5. Export
 
@@ -241,6 +258,7 @@ Already installed as `reading-time.js` — adds a *Show reading time* command th
 | ⌘E       | Toggle rich text ↔ source |
 | ⌘P       | Export as PDF             |
 | ⌘\\      | Toggle sidebar            |
+| ⌘,       | Settings                  |
 
 ***
 

@@ -8,6 +8,7 @@ import {
   resolveImageSrc,
   savePastedImage,
 } from "../lib/attachments";
+import { frontmatter } from "../plugins/frontmatter";
 
 interface Props {
   /** Content the editor was mounted with; changes remount via key upstream. */
