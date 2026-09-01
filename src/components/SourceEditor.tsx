@@ -48,6 +48,13 @@ export default function SourceEditor({ initialContent, onChange }: Props) {
           markdown({ base: markdownLanguage, codeLanguages: languages }),
           syntaxHighlighting(mdHighlight),
           keymap.of([...defaultKeymap, ...historyKeymap, indentWithTab]),
+          // same reason as the rich-text editor: macOS substitution must not
+          // rewrite markdown source as it's typed
+          EditorView.contentAttributes.of({
+            autocorrect: "off",
+            autocapitalize: "off",
+            spellcheck: "false",
+          }),
           // pasted images become files on disk plus a markdown link
           EditorView.domEventHandlers({
             paste(event, view) {
@@ -77,5 +84,5 @@ export default function SourceEditor({ initialContent, onChange }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  return <div ref={hostRef} style={{ height: "100%" }} />;
+  return <div ref={hostRef} className="source-root" style={{ height: "100%" }} />;
 }

@@ -339,13 +339,14 @@ button:focus-visible, [tabindex]:focus-visible {
   line-height: 1.65;
 }
 
-/* codemirror (source) */
-.editor-host .cm-editor {
+/* codemirror (source mode only — scoped so these never reach the
+   CodeMirror instances Milkdown uses for code blocks in rich text) */
+.editor-host .source-root .cm-editor {
   height: 100%;
   font-size: 13.5px;
   background: var(--page);
 }
-.editor-host .cm-editor .cm-content {
+.editor-host .source-root .cm-editor .cm-content {
   font-family: var(--font-mono);
   max-width: var(--col-src);
   margin: 0 auto;
@@ -353,22 +354,22 @@ button:focus-visible, [tabindex]:focus-visible {
   line-height: 1.6;
   caret-color: var(--accent);
 }
-.editor-host .cm-editor .cm-line { padding: 0 8px; }
-.editor-host .cm-editor.cm-focused { outline: none; }
-.editor-host .cm-editor .cm-selectionBackground,
-.editor-host .cm-editor.cm-focused .cm-selectionBackground {
+.editor-host .source-root .cm-editor .cm-line { padding: 0 8px; }
+.editor-host .source-root .cm-editor.cm-focused { outline: none; }
+.editor-host .source-root .cm-editor .cm-selectionBackground,
+.editor-host .source-root .cm-editor.cm-focused .cm-selectionBackground {
   background: var(--pencil-soft) !important;
 }
-.editor-host .cm-editor .cm-cursor { border-left-color: var(--accent); }
-.editor-host .cm-editor .cm-gutters {
+.editor-host .source-root .cm-editor .cm-cursor { border-left-color: var(--accent); }
+.editor-host .source-root .cm-editor .cm-gutters {
   background: var(--page);
   border: none;
   color: var(--ink-faint);
   font-family: var(--font-mono);
   font-size: 11px;
 }
-.editor-host .cm-editor .cm-activeLine { background: transparent; }
-.editor-host .cm-editor .cm-activeLineGutter { background: transparent; color: var(--ink-muted); }
+.editor-host .source-root .cm-editor .cm-activeLine { background: transparent; }
+.editor-host .source-root .cm-editor .cm-activeLineGutter { background: transparent; color: var(--ink-muted); }
 
 /* welcome (empty state) */
 .welcome {
@@ -792,3 +793,15 @@ button:focus-visible, [tabindex]:focus-visible {
 .btn.primary { background: var(--accent); color: #fff; }
 .btn.primary:hover { filter: brightness(1.08); }
 .btn:disabled { opacity: .5; }
+
+/* Code blocks inside rich text size to their content: Crepe gives them their
+   own vertical scroller, which steals the wheel and makes the page scroll
+   stutter and snap back. */
+.editor-host .milkdown .milkdown-code-block .cm-editor {
+  height: auto;
+  max-height: none;
+  overflow-y: hidden;
+}
+.editor-host .milkdown .milkdown-code-block .cm-scroller {
+  overflow-y: hidden;
+}

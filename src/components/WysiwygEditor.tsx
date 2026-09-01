@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react";
 import { Crepe } from "@milkdown/crepe";
-import { editorViewCtx } from "@milkdown/kit/core";
+import { editorViewCtx, editorViewOptionsCtx } from "@milkdown/kit/core";
 import "@milkdown/crepe/theme/common/style.css";
 import "@milkdown/crepe/theme/frame.css";
 import {
@@ -38,6 +38,23 @@ export default function WysiwygEditor({ initialContent, onChange }: Props) {
     // saving a note rewrites its metadata and escapes every [[link]].
     crepe.editor.use(frontmatter);
     crepe.editor.use(wikilink);
+
+    // macOS text substitution rewrites what you type — "abcd" arrives as
+    // "Abd" — and its suggestion bubble draws over the row below, which in a
+    // table reads as a phantom new row. Notes are Spanish with English
+    // technical terms; system autocorrect is wrong for both.
+    crepe.editor.config((ctx) => {
+      ctx.update(editorViewOptionsCtx, (prev) => ({
+        ...prev,
+        attributes: {
+          ...(typeof prev.attributes === "object" ? prev.attributes : {}),
+          autocorrect: "off",
+          autocapitalize: "off",
+          autocomplete: "off",
+          spellcheck: "false",
+        },
+      }));
+    });
 
     crepe.on((listener) => {
       listener.markdownUpdated((_ctx, markdown, prev) => {
