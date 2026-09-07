@@ -805,3 +805,23 @@ button:focus-visible, [tabindex]:focus-visible {
 .editor-host .milkdown .milkdown-code-block .cm-scroller {
   overflow-y: hidden;
 }
+
+/* ---------- external-change conflict ---------- */
+.conflict-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex: none;
+  padding: 8px 14px;
+  background: var(--pencil-soft);
+  border-bottom: 1px solid var(--line);
+  font-size: 12.5px;
+  color: var(--ink);
+}
+.conflict-text strong { font-weight: 600; }
+.conflict-actions { display: flex; gap: 8px; flex: none; }
+.conflict-bar .btn { height: 26px; padding: 0 12px; background: var(--page); }
+.conflict-bar .btn:hover { background: var(--chrome-2); }
+.conflict-bar .btn.primary { background: var(--accent); color: #fff; }
+.conflict-bar .btn.primary:hover { filter: brightness(1.08); }

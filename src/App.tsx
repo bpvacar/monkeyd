@@ -10,6 +10,7 @@ import {
   newFileIn,
 } from "./lib/fileops";
 import { initPlugins, notifyFileOpen } from "./plugins/runtime";
+import { checkTabsAgainstDisk } from "./lib/sync";
 import Toolbar from "./components/Toolbar";
 import Sidebar from "./components/Sidebar";
 import TabBar from "./components/TabBar";
@@ -17,6 +18,7 @@ import StatusBar from "./components/StatusBar";
 import Welcome from "./components/Welcome";
 import PluginsPanel from "./components/PluginsPanel";
 import PromptDialog from "./components/PromptDialog";
+import ConflictBar from "./components/ConflictBar";
 import WysiwygEditor from "./components/WysiwygEditor";
 import SourceEditor from "./components/SourceEditor";
 import welcomeDoc from "./welcome.md?raw";
@@ -99,12 +101,38 @@ function useFirstRunWelcome() {
   }, []);
 }
 
+/**
+ * Files here get edited by other tools while the app is open, so open tabs are
+ * checked against disk on focus (the common case: leave, something edits, come
+ * back) and on a slow poll for edits that land while the window is visible.
+ */
+function useDiskWatch() {
+  useEffect(() => {
+    const check = () => {
+      checkTabsAgainstDisk();
+    };
+    check();
+    const onFocus = () => check();
+    const onVisible = () => {
+      if (document.visibilityState === "visible") check();
+    };
+    window.addEventListener("focus", onFocus);
+    document.addEventListener("visibilitychange", onVisible);
+    const timer = window.setInterval(check, 3000);
+    return () => {
+      window.removeEventListener("focus", onFocus);
+      document.removeEventListener("visibilitychange", onVisible);
+      window.clearInterval(timer);
+    };
+  }, []);
+}
+
 function useAutosave() {
   const tabs = useStore((s) => s.tabs);
   useEffect(() => {
     const timer = window.setTimeout(() => {
       const tab = useStore.getState().activeTab();
-      if (tab && tab.path && tab.content !== tab.savedContent) {
+      if (tab && tab.path && !tab.conflict && tab.content !== tab.savedContent) {
         saveActiveTab();
       }
     }, 1200);
@@ -184,13 +212,13 @@ function EditorPane() {
     <div className="editor-host">
       {tab.mode === "wysiwyg" ? (
         <WysiwygEditor
-          key={`${tab.id}-w`}
+          key={`${tab.id}-w-${tab.reloadNonce}`}
           initialContent={tab.content}
           onChange={onChange}
         />
       ) : (
         <SourceEditor
-          key={`${tab.id}-s`}
+          key={`${tab.id}-s-${tab.reloadNonce}`}
           initialContent={tab.content}
           onChange={onChange}
         />
@@ -206,6 +234,7 @@ export default function App() {
   useTheme();
   useOpenedFiles();
   useFirstRunWelcome();
+  useDiskWatch();
   useAutosave();
   useShortcuts();
 
@@ -235,6 +264,7 @@ export default function App() {
       <Sidebar />
       <div className="main">
         <TabBar />
+        <ConflictBar />
         {pluginsReady ? <EditorPane /> : null}
       </div>
       <StatusBar />

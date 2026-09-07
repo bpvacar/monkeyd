@@ -108,6 +108,17 @@ Both modes support the same markdown dialect:
 
 Files are plain UTF-8 markdown — nothing proprietary is ever added to them.
 
+### When something else edits the file
+
+Notes get changed by more than this app — an agent writing to the vault, a git checkout, Obsidian on the same folder. MonkeyD re-checks every open tab against disk when the window regains focus, every few seconds while it's visible, and whenever you press the sidebar's **Refresh** button.
+
+* **No unsaved edits in that tab** — the new text is loaded automatically and you get a brief "updated from disk" notice. Nothing to decide.
+* **You had unsaved edits** — a bar appears above the document: *"… changed on disk while you were editing. Saving is paused."* Autosave stops for that tab so neither version can be lost, and you choose:
+  * **Use the file** — take what's on disk and drop your unsaved edits.
+  * **Keep mine** — write your version over the file.
+
+Saving refuses to run when the file changed underneath it, so an outside edit can't be silently overwritten by the next keystroke.
+
 ***
 
 ## 4b. Pasting images

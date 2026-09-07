@@ -36,11 +36,29 @@ fn read_text_file(path: String) -> Result<String, String> {
 }
 
 #[tauri::command]
-fn write_text_file(path: String, contents: String) -> Result<(), String> {
+fn write_text_file(path: String, contents: String) -> Result<String, String> {
     if let Some(parent) = Path::new(&path).parent() {
         fs::create_dir_all(parent).map_err(|e| e.to_string())?;
     }
-    fs::write(&path, contents).map_err(|e| e.to_string())
+    fs::write(&path, contents).map_err(|e| e.to_string())?;
+    // hand back the new stamp so the caller can't race a stat() against
+    // whatever else might be writing to this file
+    file_stamp(path)
+}
+
+/// `mtime_ms:size` — cheap fingerprint for spotting edits made outside the
+/// app. Size is included because coarse filesystem timestamps can otherwise
+/// hide a change made within the same millisecond.
+#[tauri::command]
+fn file_stamp(path: String) -> Result<String, String> {
+    let meta = fs::metadata(&path).map_err(|e| e.to_string())?;
+    let mtime = meta
+        .modified()
+        .ok()
+        .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+        .map(|d| d.as_millis())
+        .unwrap_or(0);
+    Ok(format!("{mtime}:{}", meta.len()))
 }
 
 /// Writes raw bytes (pasted images and other attachments), creating the
@@ -412,6 +430,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             read_text_file,
             write_text_file,
+            file_stamp,
             write_binary_file,
             find_orphan_attachments,
             trash_files,
