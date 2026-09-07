@@ -22,6 +22,12 @@ export interface Tab {
   content: string;
   savedContent: string;
   mode: ViewMode;
+  /** `mtime:size` of the file as this tab last saw it; null for untitled. */
+  diskStamp: string | null;
+  /** Someone else changed the file while we had unsaved edits. */
+  conflict: boolean;
+  /** Bumped to force the editor to remount with reloaded content. */
+  reloadNonce: number;
 }
 
 let nextId = 1;
@@ -67,6 +73,9 @@ interface AppState {
   pathRenamed: (from: string, to: string) => void;
   pathRemoved: (path: string) => void;
   refreshTree: () => void;
+  setDiskStamp: (id: string, stamp: string | null) => void;
+  setConflict: (id: string, conflict: boolean) => void;
+  applyExternalContent: (id: string, content: string, stamp: string) => void;
 }
 
 export const useStore = create<AppState>((set, get) => ({
@@ -97,6 +106,9 @@ export const useStore = create<AppState>((set, get) => ({
       content,
       savedContent: content,
       mode: "wysiwyg",
+      diskStamp: null,
+      conflict: false,
+      reloadNonce: 0,
     };
     set((s) => ({ tabs: [...s.tabs, tab], activeTabId: tab.id }));
   },
@@ -109,6 +121,7 @@ export const useStore = create<AppState>((set, get) => ({
     }
     try {
       const content = await backend.readTextFile(path);
+      const stamp = await backend.fileStamp(path).catch(() => null);
       const tab: Tab = {
         id: makeId(),
         path,
@@ -116,6 +129,9 @@ export const useStore = create<AppState>((set, get) => ({
         content,
         savedContent: content,
         mode: "wysiwyg",
+        diskStamp: stamp,
+        conflict: false,
+        reloadNonce: 0,
       };
       set((s) => {
         // replace a pristine empty untitled tab instead of stacking next to it
@@ -259,6 +275,33 @@ export const useStore = create<AppState>((set, get) => ({
     }),
 
   refreshTree: () => set((s) => ({ treeVersion: s.treeVersion + 1 })),
+
+  setDiskStamp: (id, stamp) =>
+    set((s) => ({
+      tabs: s.tabs.map((t) => (t.id === id ? { ...t, diskStamp: stamp } : t)),
+    })),
+
+  setConflict: (id, conflict) =>
+    set((s) => ({
+      tabs: s.tabs.map((t) => (t.id === id ? { ...t, conflict } : t)),
+    })),
+
+  /** Replaces a tab's text with what's on disk, remounting the editor. */
+  applyExternalContent: (id, content, stamp) =>
+    set((s) => ({
+      tabs: s.tabs.map((t) =>
+        t.id === id
+          ? {
+              ...t,
+              content,
+              savedContent: content,
+              diskStamp: stamp,
+              conflict: false,
+              reloadNonce: t.reloadNonce + 1,
+            }
+          : t
+      ),
+    })),
 
   showToast: (msg) => {
     set({ toast: msg });

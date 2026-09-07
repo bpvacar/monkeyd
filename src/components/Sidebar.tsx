@@ -11,6 +11,7 @@ import {
   revealEntry,
 } from "../lib/fileops";
 import ContextMenu, { useContextMenu, type MenuItem } from "./ContextMenu";
+import { checkTabsAgainstDisk } from "../lib/sync";
 
 function TreeNode({
   entry,
@@ -82,7 +83,12 @@ export default function Sidebar() {
   const workspace = useStore((s) => s.workspace);
   const sidebarOpen = useStore((s) => s.sidebarOpen);
   const treeVersion = useStore((s) => s.treeVersion);
-  const refreshTree = useStore((s) => s.refreshTree);
+  const refreshTreeOnly = useStore((s) => s.refreshTree);
+  // one button for "re-read everything from disk": the tree and every open tab
+  const refreshTree = () => {
+    refreshTreeOnly();
+    checkTabsAgainstDisk();
+  };
   const [roots, setRoots] = useState<DirEntry[]>([]);
   const { menu, openMenu, closeMenu } = useContextMenu();
 

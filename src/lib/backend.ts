@@ -22,8 +22,12 @@ export interface UserTheme {
 export const readTextFile = (path: string) =>
   invoke<string>("read_text_file", { path });
 
+/** Returns the on-disk stamp after writing, for change detection. */
 export const writeTextFile = (path: string, contents: string) =>
-  invoke<void>("write_text_file", { path, contents });
+  invoke<string>("write_text_file", { path, contents });
+
+export const fileStamp = (path: string) =>
+  invoke<string>("file_stamp", { path });
 
 export const writeBinaryFile = (path: string, bytes: number[]) =>
   invoke<void>("write_binary_file", { path, bytes });

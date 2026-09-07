@@ -10,6 +10,7 @@
 - **PDF export** (`⌘P`): renders the compiled document (GFM tables, task lists, syntax-highlighted code, KaTeX math) through the system print dialog — choose "Save as PDF". HTML export too.
 - **Paste images** (`⌘V`): screenshots and photos are written into a configurable attachment folder as `Pasted image YYYYMMDDHHMMSS.png` and linked with standard `![](relative/path)` — no base64 blobs, and portable to Obsidian.
 - **Attachment hygiene**: pasted images are downscaled to a configurable limit, and an "unused images" scan finds attachments no note links to and moves them to the Trash.
+- **External-change sync**: open tabs are re-checked against disk; a file edited by another tool is picked up automatically, or flagged with a conflict bar if you had unsaved edits — autosave never silently overwrites someone else's write.
 - **Adjustable writing width**: Narrow / Standard / Wide / Full, in the Plugins & appearance panel.
 - **Themes**: light / dark / match system, plus custom CSS themes dropped into `<app data>/themes/*.css`.
 - **Plugins**: JavaScript files in `<app data>/plugins/` (a `name.js` file, or a folder with `index.js` + optional `plugin.json`). See `examples/plugins/reading-time.js`.

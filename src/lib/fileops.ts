@@ -33,9 +33,19 @@ export async function saveActiveTab(): Promise<boolean> {
     path = picked;
     s.setTabPath(tab.id, path);
   }
+  // Refuse to write over an edit made outside the app. The tab is flagged
+  // instead, and the conflict bar asks which version wins.
+  if (tab.diskStamp !== null) {
+    const current = await backend.fileStamp(path).catch(() => null);
+    if (current !== null && current !== tab.diskStamp) {
+      s.setConflict(tab.id, true);
+      return false;
+    }
+  }
   try {
-    await backend.writeTextFile(path, tab.content);
+    const stamp = await backend.writeTextFile(path, tab.content);
     s.markSaved(tab.id, tab.content);
+    s.setDiskStamp(tab.id, stamp);
     return true;
   } catch (e) {
     s.showToast(`Save failed: ${e}`);
