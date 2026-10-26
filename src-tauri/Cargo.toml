@@ -1,6 +1,6 @@
 [package]
 name = "mdeditor"
-version = "0.1.5"
+version = "0.1.6"
 description = "MonkeyD, a markdown editor for macOS"
 authors = ["Benjamín Vaca"]
 edition = "2021"
