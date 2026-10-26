@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useState } from "react";
 import { listen } from "@tauri-apps/api/event";
+import { ask } from "@tauri-apps/plugin-dialog";
 import { useStore } from "./store";
-import { getPendingFiles, loadUserThemes } from "./lib/backend";
+import { armQuitGuard, getPendingFiles, loadUserThemes, quit } from "./lib/backend";
 import {
+  saveTab,
   saveActiveTab,
   openFileDialog,
   openFolderDialog,
@@ -86,13 +88,13 @@ function useFirstRunWelcome() {
     if (localStorage.getItem(WELCOMED_KEY)) return;
     let cancelled = false;
     (async () => {
-      const files = await getPendingFiles().catch(() => [] as string[]);
-      // give the pending-file drain a beat to open anything the OS passed us
+      // give the pending-file drain a beat to open anything the OS passed us;
+      // don't drain the queue here, or those files would never open
       await new Promise((r) => setTimeout(r, 150));
       if (cancelled) return;
       localStorage.setItem(WELCOMED_KEY, "1");
       const s = useStore.getState();
-      if (files.length > 0 || s.tabs.length > 0) return;
+      if (s.tabs.length > 0) return;
       s.newTab(welcomeDoc);
     })();
     return () => {
@@ -138,6 +140,40 @@ function useAutosave() {
     }, 1200);
     return () => window.clearTimeout(timer);
   }, [tabs]);
+}
+
+/**
+ * ⌘Q and the close button come here first: tabs backed by a file are saved,
+ * and anything still unsaved (scratch tabs, conflicts, failed saves) is asked
+ * about before the app exits.
+ */
+function useQuitGuard() {
+  useEffect(() => {
+    const unlisten = listen("quit-requested", async () => {
+      for (const t of useStore.getState().tabs) {
+        if (t.path && !t.conflict && t.content !== t.savedContent) await saveTab(t.id);
+      }
+      const unsaved = useStore
+        .getState()
+        .tabs.filter((t) => t.content !== t.savedContent)
+        .map((t) => `“${t.title}”`);
+      if (
+        unsaved.length > 0 &&
+        !(await ask(`Unsaved changes in ${unsaved.join(", ")}. Quit without saving them?`, {
+          kind: "warning",
+          okLabel: "Quit",
+          cancelLabel: "Cancel",
+        }))
+      ) {
+        return;
+      }
+      quit();
+    });
+    unlisten.then(() => armQuitGuard());
+    return () => {
+      unlisten.then((fn) => fn());
+    };
+  }, []);
 }
 
 function useShortcuts() {
@@ -236,6 +272,7 @@ export default function App() {
   useFirstRunWelcome();
   useDiskWatch();
   useAutosave();
+  useQuitGuard();
   useShortcuts();
 
   useEffect(() => {

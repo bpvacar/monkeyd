@@ -15,6 +15,7 @@ import {
   type OrphanFile,
 } from "../lib/backend";
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
+import { ask } from "@tauri-apps/plugin-dialog";
 
 export default function PluginsPanel() {
   const open = useStore((s) => s.pluginsPanelOpen);
@@ -103,10 +104,11 @@ export default function PluginsPanel() {
     const total = (orphans ?? [])
       .filter((o) => chosen.has(o.path))
       .reduce((n, o) => n + o.size, 0);
-    const ok = window.confirm(
+    const ok = await ask(
       `Move ${paths.length} unused image${paths.length === 1 ? "" : "s"} ` +
         `(${formatSize(total)}) to the Trash?\n\n` +
-        `They can be restored from the Trash if this was a mistake.`
+        `They can be restored from the Trash if this was a mistake.`,
+      { kind: "warning", okLabel: "Move to Trash", cancelLabel: "Cancel" }
     );
     if (!ok) return;
     try {

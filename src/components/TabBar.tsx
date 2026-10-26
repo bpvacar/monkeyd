@@ -43,8 +43,9 @@ export default function TabBar() {
       {
         label: "Close others",
         disabled: tabs.length < 2,
-        onSelect: () => {
-          for (const t of tabs) if (t.id !== tab.id) closeTab(t.id);
+        onSelect: async () => {
+          // one dialog at a time
+          for (const t of tabs) if (t.id !== tab.id) await closeTab(t.id);
         },
       },
       {

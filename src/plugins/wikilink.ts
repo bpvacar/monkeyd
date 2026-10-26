@@ -18,8 +18,12 @@
 import { $node, $remark } from "@milkdown/kit/utils";
 import type { Node as ProseNode } from "@milkdown/prose/model";
 
-/** `[[Target]]`, `[[Target|alias]]`, `![[embed.png]]`, `[[Target#heading]]`. */
-const WIKILINK = /!?\[\[[^\]\n]+\]\]/g;
+/**
+ * `[[Target]]`, `[[Target|alias]]`, `![[embed.png]]`, `[[Target#heading]]`,
+ * plus two other Obsidian shapes remark would escape the same way: a callout
+ * marker `[!note]` (→ `\[!note]`) and a `#tag` at line start (→ `\#tag`).
+ */
+const WIKILINK = /!?\[\[[^\]\n]+\]\]|\[![\w-]+\][+-]?|#[\p{L}\p{N}_/-]+/gu;
 
 interface MdNode {
   type: string;

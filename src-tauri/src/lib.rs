@@ -1,12 +1,18 @@
 use serde::Serialize;
 use std::fs;
 use std::path::Path;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Mutex;
 use tauri::{Emitter, Manager, State};
 
 /// Files the OS asked us to open before the frontend was ready.
 #[derive(Default)]
 struct PendingFiles(Mutex<Vec<String>>);
+
+/// Set once the frontend listens for "quit-requested". Until then quitting
+/// can't lose any edits, and a frontend that never loaded can't block quit.
+#[derive(Default)]
+struct QuitGuard(AtomicBool);
 
 #[derive(Serialize)]
 struct DirEntry {
@@ -62,13 +68,39 @@ fn file_stamp(path: String) -> Result<String, String> {
 }
 
 /// Writes raw bytes (pasted images and other attachments), creating the
-/// containing folder if it doesn't exist yet.
+/// containing folder if it doesn't exist yet. Never overwrites: two pastes in
+/// the same second share a name, and the first image would be lost. Fails
+/// with "AlreadyExists" so the caller can pick another name.
+///
+/// The bytes arrive as the raw request body and the path as a URI-encoded
+/// `path` header: as JSON, a 40 MB photo becomes a ~150 MB number array.
 #[tauri::command]
-fn write_binary_file(path: String, bytes: Vec<u8>) -> Result<(), String> {
+fn write_binary_file(request: tauri::ipc::Request<'_>) -> Result<(), String> {
+    let tauri::ipc::InvokeBody::Raw(bytes) = request.body() else {
+        return Err("expected raw bytes".into());
+    };
+    let path = request
+        .headers()
+        .get("path")
+        .and_then(|v| v.to_str().ok())
+        .ok_or("missing path header")?;
+    write_new_file(&percent_decode(path), bytes)
+}
+
+fn write_new_file(path: &str, bytes: &[u8]) -> Result<(), String> {
+    use std::io::Write;
     if let Some(parent) = Path::new(&path).parent() {
         fs::create_dir_all(parent).map_err(|e| e.to_string())?;
     }
-    fs::write(&path, &bytes).map_err(|e| e.to_string())
+    let mut file = fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(&path)
+        .map_err(|e| match e.kind() {
+            std::io::ErrorKind::AlreadyExists => "AlreadyExists".to_string(),
+            _ => e.to_string(),
+        })?;
+    file.write_all(bytes).map_err(|e| e.to_string())
 }
 
 #[derive(Serialize)]
@@ -120,7 +152,9 @@ fn percent_decode(s: &str) -> String {
     let mut i = 0;
     while i < bytes.len() {
         if bytes[i] == b'%' && i + 2 < bytes.len() {
-            if let Ok(b) = u8::from_str_radix(&s[i + 1..i + 3], 16) {
+            // slice bytes, not the str: `20%añ` would cut `ñ` in half and panic
+            let hex = std::str::from_utf8(&bytes[i + 1..i + 3]).unwrap_or("");
+            if let Ok(b) = u8::from_str_radix(hex, 16) {
                 out.push(b);
                 i += 3;
                 continue;
@@ -411,6 +445,27 @@ fn load_user_themes(app: tauri::AppHandle) -> Result<Vec<UserTheme>, String> {
     Ok(themes)
 }
 
+#[tauri::command]
+fn arm_quit_guard(state: State<QuitGuard>) {
+    state.0.store(true, Ordering::SeqCst);
+}
+
+/// Called by the frontend once unsaved tabs are dealt with.
+#[tauri::command]
+fn quit(app: tauri::AppHandle) {
+    app.exit(0);
+}
+
+/// ⌘Q and the window's close button land here: the frontend saves what it
+/// can and asks about the rest, then calls `quit`.
+fn request_quit(app: &tauri::AppHandle) -> bool {
+    if !app.state::<QuitGuard>().0.load(Ordering::SeqCst) {
+        return false;
+    }
+    let _ = app.emit("quit-requested", ());
+    true
+}
+
 fn queue_and_notify(app: &tauri::AppHandle, paths: Vec<String>) {
     if paths.is_empty() {
         return;
@@ -427,6 +482,19 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .manage(PendingFiles::default())
+        .manage(QuitGuard::default())
+        .on_menu_event(|app, event| {
+            if event.id() == "quit" && !request_quit(app) {
+                app.exit(0);
+            }
+        })
+        .on_window_event(|window, event| {
+            if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                if request_quit(window.app_handle()) {
+                    api.prevent_close();
+                }
+            }
+        })
         .invoke_handler(tauri::generate_handler![
             read_text_file,
             write_text_file,
@@ -443,9 +511,29 @@ pub fn run() {
             print_window,
             plugins_dir,
             load_plugins,
-            load_user_themes
+            load_user_themes,
+            arm_quit_guard,
+            quit
         ])
         .setup(|app| {
+            // The stock Quit item terminates on the spot (macOS gives no hook
+            // to veto it), so swap it for one that asks the frontend first.
+            let menu = tauri::menu::Menu::default(app.handle())?;
+            if let Some(tauri::menu::MenuItemKind::Submenu(app_menu)) =
+                menu.items()?.into_iter().next()
+            {
+                let last = app_menu.items()?.len() - 1;
+                app_menu.remove_at(last)?;
+                app_menu.append(&tauri::menu::MenuItem::with_id(
+                    app,
+                    "quit",
+                    "Quit MonkeyD",
+                    true,
+                    Some("CmdOrCtrl+Q"),
+                )?)?;
+            }
+            app.set_menu(menu)?;
+
             let args: Vec<String> = std::env::args()
                 .skip(1)
                 .filter(|a| !a.starts_with('-') && Path::new(a).exists())
@@ -541,6 +629,25 @@ mod tests {
         assert!(f.exists());
         trash_files(vec![f.to_string_lossy().into()]).unwrap();
         assert!(!f.exists(), "file should be gone from its original path");
+    }
+
+    #[test]
+    fn percent_decoding_survives_non_ascii_after_a_percent() {
+        assert_eq!(percent_decode("Pasted%20image.png"), "Pasted image.png");
+        assert_eq!(percent_decode("Descuento 20%año.png"), "Descuento 20%año.png");
+        assert_eq!(percent_decode("50%é"), "50%é");
+    }
+
+    #[test]
+    fn binary_writes_never_clobber_an_existing_file() {
+        let f = std::env::temp_dir()
+            .join(format!("monkeyd-paste-probe-{}.png", std::process::id()));
+        let _ = fs::remove_file(&f);
+        let path = f.to_string_lossy().into_owned();
+        write_new_file(&path, b"first").unwrap();
+        assert_eq!(write_new_file(&path, b"second"), Err("AlreadyExists".to_string()));
+        assert_eq!(fs::read(&f).unwrap(), b"first");
+        let _ = fs::remove_file(&f);
     }
 
     #[test]

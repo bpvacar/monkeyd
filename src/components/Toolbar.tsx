@@ -32,8 +32,15 @@ function Menu({
     const onDown = (e: MouseEvent) => {
       if (!ref.current?.contains(e.target as Node)) setOpen(false);
     };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setOpen(false);
+    };
     window.addEventListener("mousedown", onDown);
-    return () => window.removeEventListener("mousedown", onDown);
+    window.addEventListener("keydown", onKey);
+    return () => {
+      window.removeEventListener("mousedown", onDown);
+      window.removeEventListener("keydown", onKey);
+    };
   }, [open]);
 
   return (
@@ -51,23 +58,13 @@ function Menu({
       {open && (
         <div
           role="menu"
+          className="context-menu"
           // the titlebar is a "deep" drag region; the popup must not inherit it,
           // or clicking its padding would drag the window instead of hitting an item
           data-tauri-drag-region="false"
-          style={{
-            position: "absolute",
-            top: "calc(100% + 4px)",
-            // anchored left: the button sits near the window's left edge, so a
-            // right-anchored popup would overflow off-screen
-            left: 0,
-            minWidth: 180,
-            background: "var(--page)",
-            border: "1px solid var(--line)",
-            borderRadius: 8,
-            boxShadow: "0 8px 24px rgba(0,0,0,.14)",
-            padding: 4,
-            zIndex: 60,
-          }}
+          // anchored left: the button sits near the window's left edge, so a
+          // right-anchored popup would overflow off-screen
+          style={{ position: "absolute", top: "calc(100% + 4px)", left: 0, minWidth: 180 }}
         >
           {children(() => setOpen(false))}
         </div>
@@ -76,38 +73,28 @@ function Menu({
   );
 }
 
+/** Same look as the right-click menus, plus a shortcut hint. */
 function MenuItem({
   onClick,
   children,
   shortcut,
+  danger,
+  divided,
 }: {
   onClick: () => void;
   children: React.ReactNode;
   shortcut?: string;
+  danger?: boolean;
+  divided?: boolean;
 }) {
   return (
     <button
       role="menuitem"
+      className={`context-item ${danger ? "danger" : ""} ${divided ? "divided" : ""}`}
       onClick={onClick}
-      style={{
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "space-between",
-        gap: 16,
-        width: "100%",
-        height: 28,
-        padding: "0 10px",
-        borderRadius: 5,
-        fontSize: 12.5,
-        textAlign: "left",
-      }}
-      onMouseEnter={(e) => (e.currentTarget.style.background = "var(--chrome-2)")}
-      onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
     >
       <span>{children}</span>
-      {shortcut && (
-        <span style={{ color: "var(--ink-faint)", fontSize: 11 }}>{shortcut}</span>
-      )}
+      {shortcut && <span className="shortcut">{shortcut}</span>}
     </button>
   );
 }
@@ -149,18 +136,18 @@ export default function Toolbar() {
                 New file…
               </MenuItem>
             )}
-            <MenuItem onClick={() => { openFileDialog(); close(); }} shortcut="⌘O">
-              Open file…
-            </MenuItem>
-            <MenuItem onClick={() => { openFolderDialog(); close(); }} shortcut="⇧⌘O">
-              Open folder…
-            </MenuItem>
             {workspace && (
               <MenuItem onClick={() => { newFolderIn(workspace); close(); }}>
                 New folder…
               </MenuItem>
             )}
-            <MenuItem onClick={() => { saveActiveTab(); close(); }} shortcut="⌘S">
+            <MenuItem onClick={() => { openFileDialog(); close(); }} shortcut="⌘O" divided>
+              Open file…
+            </MenuItem>
+            <MenuItem onClick={() => { openFolderDialog(); close(); }} shortcut="⇧⌘O">
+              Open folder…
+            </MenuItem>
+            <MenuItem onClick={() => { saveActiveTab(); close(); }} shortcut="⌘S" divided>
               Save
             </MenuItem>
             <MenuItem onClick={() => { exportActivePdf(); close(); }} shortcut="⌘P">
@@ -171,13 +158,13 @@ export default function Toolbar() {
             </MenuItem>
             {activePath && (
               <>
-                <MenuItem onClick={() => { renameEntry(activePath); close(); }}>
+                <MenuItem onClick={() => { renameEntry(activePath); close(); }} divided>
                   Rename…
                 </MenuItem>
                 <MenuItem onClick={() => { revealEntry(activePath); close(); }}>
                   Reveal in Finder
                 </MenuItem>
-                <MenuItem onClick={() => { trashEntry(activePath); close(); }}>
+                <MenuItem onClick={() => { trashEntry(activePath); close(); }} danger divided>
                   Move to Trash
                 </MenuItem>
               </>

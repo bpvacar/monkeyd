@@ -737,6 +737,7 @@ button:focus-visible, [tabindex]:focus-visible {
 }
 .context-item:hover:not(:disabled) { background: var(--chrome-2); }
 .context-item:disabled { color: var(--ink-faint); }
+.context-item .shortcut { margin-left: auto; padding-left: 16px; color: var(--ink-faint); font-size: 11px; }
 .context-item.danger { color: var(--danger); }
 .context-item.danger:hover:not(:disabled) { background: var(--danger); color: #fff; }
 .context-item.divided {
