@@ -1,5 +1,5 @@
 import { convertFileSrc } from "@tauri-apps/api/core";
-import { useStore } from "../store";
+import { dirOf, useStore } from "../store";
 import { writeBinaryFile } from "./backend";
 
 /** `20260731143022` — the timestamp shape Obsidian uses for pasted images. */
@@ -10,8 +10,6 @@ function stamp(d = new Date()): string {
     `${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}`
   );
 }
-
-const dirOf = (path: string) => path.slice(0, path.lastIndexOf("/")) || "/";
 
 /** POSIX relative path from a directory to a file, e.g. `../assets/x.png`. */
 function relativePath(fromDir: string, toPath: string): string {
@@ -62,12 +60,12 @@ function extensionFor(mime: string): string {
 }
 
 interface Encoded {
-  bytes: number[];
+  bytes: Uint8Array;
   ext: string;
 }
 
-const toBytes = async (blob: Blob): Promise<number[]> =>
-  Array.from(new Uint8Array(await blob.arrayBuffer()));
+const toBytes = async (blob: Blob): Promise<Uint8Array> =>
+  new Uint8Array(await blob.arrayBuffer());
 
 /** True if any sampled pixel is not fully opaque. */
 function hasTransparency(ctx: CanvasRenderingContext2D, w: number, h: number) {
@@ -178,9 +176,19 @@ export async function savePastedImage(
   let name: string;
   try {
     const { bytes, ext } = await encodeForDisk(file, s.imageMaxEdge);
-    name = `Pasted image ${stamp()}.${ext}`;
-    absPath = folder ? `${base}/${folder}/${name}` : `${base}/${name}`;
-    await writeBinaryFile(absPath, bytes);
+    const when = stamp();
+    // same-second pastes collide; the backend refuses to overwrite, so count
+    // up the way Obsidian does ("Pasted image … 1.png")
+    for (let n = 0; ; n++) {
+      name = `Pasted image ${when}${n ? ` ${n}` : ""}.${ext}`;
+      absPath = folder ? `${base}/${folder}/${name}` : `${base}/${name}`;
+      try {
+        await writeBinaryFile(absPath, bytes);
+        break;
+      } catch (e) {
+        if (e !== "AlreadyExists" || n >= 99) throw e;
+      }
+    }
   } catch (e) {
     s.showToast(`Couldn't save image: ${e}`);
     return null;

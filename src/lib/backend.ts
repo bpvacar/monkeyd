@@ -29,8 +29,11 @@ export const writeTextFile = (path: string, contents: string) =>
 export const fileStamp = (path: string) =>
   invoke<string>("file_stamp", { path });
 
-export const writeBinaryFile = (path: string, bytes: number[]) =>
-  invoke<void>("write_binary_file", { path, bytes });
+/** Raw body, not JSON: a number array is ~4x the size and stalls on big photos. */
+export const writeBinaryFile = (path: string, bytes: Uint8Array) =>
+  invoke<void>("write_binary_file", bytes, {
+    headers: { path: encodeURIComponent(path) },
+  });
 
 export interface OrphanFile {
   path: string;
@@ -58,6 +61,10 @@ export const copyFile = (from: string, to: string) =>
 export const listDir = (path: string) => invoke<DirEntry[]>("list_dir", { path });
 
 export const getPendingFiles = () => invoke<string[]>("get_pending_files");
+
+export const armQuitGuard = () => invoke<void>("arm_quit_guard");
+
+export const quit = () => invoke<void>("quit");
 
 export const pluginsDir = () => invoke<string>("plugins_dir");
 

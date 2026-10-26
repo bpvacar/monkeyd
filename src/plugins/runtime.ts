@@ -81,7 +81,13 @@ function makeApi(pluginName: string) {
     setActiveDocument(content: string) {
       const s = useStore.getState();
       const tab = s.activeTab();
-      if (tab) s.setContent(tab.id, content);
+      if (!tab) return;
+      // the mounted editor owns its text, so remount it with the new content
+      useStore.setState({
+        tabs: s.tabs.map((t) =>
+          t.id === tab.id ? { ...t, content, reloadNonce: t.reloadNonce + 1 } : t
+        ),
+      });
     },
     toast(msg: string) {
       useStore.getState().showToast(String(msg));

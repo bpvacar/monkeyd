@@ -1,5 +1,6 @@
-import { open, save } from "@tauri-apps/plugin-dialog";
-import { useStore } from "../store";
+import { ask, open, save } from "@tauri-apps/plugin-dialog";
+import { dirOf, fileName as baseOf, useStore } from "../store";
+import { notifySave } from "../plugins/runtime";
 import * as backend from "./backend";
 import { exportToPdf, exportToHtml } from "./exporter";
 
@@ -19,9 +20,14 @@ export async function openFolderDialog() {
   if (typeof picked === "string") useStore.getState().setWorkspace(picked);
 }
 
-export async function saveActiveTab(): Promise<boolean> {
+export const saveActiveTab = (): Promise<boolean> => {
+  const id = useStore.getState().activeTabId;
+  return id ? saveTab(id) : Promise.resolve(false);
+};
+
+export async function saveTab(id: string): Promise<boolean> {
   const s = useStore.getState();
-  const tab = s.activeTab();
+  const tab = s.tabs.find((t) => t.id === id);
   if (!tab) return false;
   let path = tab.path;
   if (!path) {
@@ -46,6 +52,7 @@ export async function saveActiveTab(): Promise<boolean> {
     const stamp = await backend.writeTextFile(path, tab.content);
     s.markSaved(tab.id, tab.content);
     s.setDiskStamp(tab.id, stamp);
+    notifySave(path, tab.content);
     return true;
   } catch (e) {
     s.showToast(`Save failed: ${e}`);
@@ -77,9 +84,6 @@ export async function exportActiveHtml() {
 }
 
 // ---------- file management (sidebar / tab context menus) ----------
-
-const dirOf = (p: string) => p.slice(0, p.lastIndexOf("/")) || "/";
-const baseOf = (p: string) => p.split("/").pop() ?? p;
 
 /** Rejects names that would move the entry somewhere else entirely. */
 function invalidName(name: string): string | null {
@@ -137,10 +141,11 @@ export async function renameEntry(path: string, isDir = false) {
 export async function trashEntry(path: string, isDir = false) {
   const s = useStore.getState();
   const name = baseOf(path);
-  const ok = window.confirm(
+  const ok = await ask(
     `Move “${name}” to the Trash?` +
       (isDir ? "\n\nEverything inside it goes too." : "") +
-      "\n\nYou can restore it from the Trash."
+      "\n\nYou can restore it from the Trash.",
+    { kind: "warning", okLabel: "Move to Trash", cancelLabel: "Cancel" }
   );
   if (!ok) return;
   try {

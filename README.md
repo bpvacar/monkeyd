@@ -25,11 +25,12 @@ Download the latest `.dmg` from [Releases](../../releases), open it, and drag **
 
 > The app is not yet notarized by Apple, so on first launch macOS Gatekeeper may block it.
 > Right-click the app → **Open** → **Open**, or run `xattr -dr com.apple.quarantine /Applications/MonkeyD.app`.
-> Builds are currently Apple Silicon (`aarch64`) only.
+> Builds are universal (Apple Silicon and Intel).
 
 ## Plugin API
 
-Each plugin runs at startup with an `mdeditor` global:
+Each plugin runs at startup with an `mdeditor` global. Plugins run with the app's full
+permissions (they can read and write any file), so only install code you trust.
 
 | Method | Purpose |
 | --- | --- |

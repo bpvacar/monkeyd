@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { ask } from "@tauri-apps/plugin-dialog";
 import * as backend from "./lib/backend";
 
 export type ViewMode = "wysiwyg" | "source";
@@ -33,7 +34,8 @@ export interface Tab {
 let nextId = 1;
 const makeId = () => `tab-${nextId++}`;
 
-const fileName = (path: string) => path.split("/").pop() ?? path;
+export const fileName = (path: string) => path.split("/").pop() ?? path;
+export const dirOf = (path: string) => path.slice(0, path.lastIndexOf("/")) || "/";
 
 interface AppState {
   tabs: Tab[];
@@ -53,7 +55,7 @@ interface AppState {
   activeTab: () => Tab | null;
   newTab: (content?: string) => void;
   openPath: (path: string) => Promise<void>;
-  closeTab: (id: string) => void;
+  closeTab: (id: string) => Promise<void>;
   setActive: (id: string) => void;
   setContent: (id: string, content: string) => void;
   markSaved: (id: string, content: string) => void;
@@ -147,12 +149,17 @@ export const useStore = create<AppState>((set, get) => ({
     }
   },
 
-  closeTab: (id) => {
+  closeTab: async (id) => {
     const tab = get().tabs.find((t) => t.id === id);
+    // window.confirm is a silent "Cancel" in Tauri's WKWebView; use the native dialog
     if (
       tab &&
       tab.content !== tab.savedContent &&
-      !window.confirm(`"${tab.title}" has unsaved changes. Close without saving?`)
+      !(await ask(`"${tab.title}" has unsaved changes. Close without saving?`, {
+        kind: "warning",
+        okLabel: "Close",
+        cancelLabel: "Cancel",
+      }))
     ) {
       return;
     }
