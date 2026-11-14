@@ -1,7 +1,16 @@
 import { useEffect, useRef } from "react";
 import { Crepe } from "@milkdown/crepe";
 import { commandsCtx, editorViewCtx, editorViewOptionsCtx } from "@milkdown/kit/core";
-import { toggleInlineCodeCommand } from "@milkdown/kit/preset/commonmark";
+import {
+  toggleEmphasisCommand,
+  toggleInlineCodeCommand,
+  toggleStrongCommand,
+  wrapInBlockquoteCommand,
+  wrapInHeadingCommand,
+} from "@milkdown/kit/preset/commonmark";
+import { linkTooltipAPI } from "@milkdown/kit/component/link-tooltip";
+import { lift } from "@milkdown/kit/prose/commands";
+import type { Ctx } from "@milkdown/kit/ctx";
 import { keymap } from "@milkdown/kit/prose/keymap";
 import { Plugin, PluginKey, TextSelection } from "@milkdown/kit/prose/state";
 import { Decoration, DecorationSet, type EditorView } from "@milkdown/kit/prose/view";
@@ -18,6 +27,40 @@ import { keepMarkdownAsWritten } from "../plugins/fidelity";
 import { wikilink } from "../plugins/wikilink";
 import { useStore } from "../store";
 import { findInDoc, type FindTarget } from "../lib/find";
+import type { FormatTarget } from "../lib/format";
+
+/** Format menu in rich text: Milkdown's own commands, so marks and undo behave as typed. */
+function formatTargetFor(ctx: Ctx): FormatTarget {
+  return (f) => {
+    const view = ctx.get(editorViewCtx);
+    const commands = ctx.get(commandsCtx);
+    if (f === "bold") commands.call(toggleStrongCommand.key);
+    else if (f === "italic") commands.call(toggleEmphasisCommand.key);
+    else if (f === "code") commands.call(toggleInlineCodeCommand.key);
+    else if (f === "link") {
+      const { from, empty } = view.state.selection;
+      let { to } = view.state.selection;
+      if (empty) {
+        view.dispatch(view.state.tr.insertText("link", from));
+        to = from + 4;
+      }
+      ctx.get(linkTooltipAPI.key).addLink(from, to);
+      return;
+    } else if (f === "quote") {
+      const { $from } = view.state.selection;
+      let inQuote = false;
+      for (let d = $from.depth; d > 0; d--) if ($from.node(d).type.name === "blockquote") inQuote = true;
+      if (inQuote) lift(view.state, view.dispatch);
+      else commands.call(wrapInBlockquoteCommand.key);
+    } else {
+      const level = Number(f.slice(1));
+      const block = view.state.selection.$from.parent;
+      const same = block.type.name === "heading" && block.attrs.level === level;
+      commands.call(wrapInHeadingCommand.key, same ? 0 : level);
+    }
+    view.focus();
+  };
+}
 
 /** Find matches as decorations, so they follow edits and WebKit repaints them. */
 const findKey = new PluginKey<DecorationSet>("find");
@@ -67,6 +110,13 @@ function findTargetFor(view: EditorView): FindTarget {
     close() {
       view.dispatch(view.state.tr.setMeta(findKey, DecorationSet.empty));
       view.focus();
+    },
+    replace(ms, text) {
+      if (!ms.length) return;
+      const tr = view.state.tr;
+      for (const m of [...ms].reverse()) tr.insertText(text, m.from, m.to);
+      const end = tr.mapping.map(ms[ms.length - 1].to);
+      view.dispatch(tr.setSelection(TextSelection.create(tr.doc, end)));
     },
   };
 }
@@ -164,6 +214,7 @@ export default function WysiwygEditor({ initialContent, onChange }: Props) {
 
     let destroyed = false;
     let findTarget: FindTarget | null = null;
+    let formatTarget: FormatTarget | null = null;
     crepe
       .create()
       // focus on mount so typing (and ⌘V) land in the document straight away,
@@ -174,7 +225,9 @@ export default function WysiwygEditor({ initialContent, onChange }: Props) {
           const view = ctx.get(editorViewCtx);
           view.focus();
           findTarget = findTargetFor(view);
+          formatTarget = formatTargetFor(ctx);
           useStore.getState().setFindTarget(findTarget);
+          useStore.getState().setFormatTarget(formatTarget);
         });
       })
       .catch((e) => console.error("crepe mount failed", e));
@@ -182,6 +235,7 @@ export default function WysiwygEditor({ initialContent, onChange }: Props) {
       root.removeEventListener("paste", onPaste, true);
       const s = useStore.getState();
       if (findTarget && s.findTarget === findTarget) s.setFindTarget(null);
+      if (formatTarget && s.formatTarget === formatTarget) s.setFormatTarget(null);
       if (!destroyed) {
         destroyed = true;
         crepe.destroy();

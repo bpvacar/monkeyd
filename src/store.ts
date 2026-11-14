@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import * as backend from "./lib/backend";
 import type { FindTarget } from "./lib/find";
+import type { FormatTarget } from "./lib/format";
 import { rememberRecent } from "./lib/recent";
 
 export type ViewMode = "wysiwyg" | "source";
@@ -69,6 +70,8 @@ interface AppState {
   imageMaxEdge: number;
   pluginsPanelOpen: boolean;
   unusedImagesOpen: boolean;
+  /** Format menu commands for the mounted editor, if any. */
+  formatTarget: FormatTarget | null;
   /** The mounted editor the find bar searches, if any. */
   findTarget: FindTarget | null;
   toast: Toast | null;
@@ -94,6 +97,7 @@ interface AppState {
   setPluginsPanelOpen: (open: boolean) => void;
   setFindTarget: (t: FindTarget | null) => void;
   setUnusedImagesOpen: (open: boolean) => void;
+  setFormatTarget: (t: FormatTarget | null) => void;
   showToast: (text: string, kind?: Toast["kind"], action?: Toast["action"]) => void;
   dismissToast: () => void;
   askName: (opts: Omit<PromptRequest, "resolve">) => Promise<string | null>;
@@ -119,6 +123,7 @@ export const useStore = create<AppState>((set, get) => ({
   pluginsPanelOpen: false,
   findTarget: null,
   unusedImagesOpen: false,
+  formatTarget: null,
   toast: null,
   prompt: null,
   treeVersion: 0,
@@ -261,6 +266,7 @@ export const useStore = create<AppState>((set, get) => ({
   setPluginsPanelOpen: (open) => set({ pluginsPanelOpen: open }),
   setFindTarget: (findTarget) => set({ findTarget }),
   setUnusedImagesOpen: (unusedImagesOpen) => set({ unusedImagesOpen }),
+  setFormatTarget: (formatTarget) => set({ formatTarget }),
 
   askName: (opts) =>
     new Promise<string | null>((resolve) => {

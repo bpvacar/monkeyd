@@ -72,4 +72,7 @@ export const loadPlugins = () => invoke<PluginSource[]>("load_plugins");
 
 export const loadUserThemes = () => invoke<UserTheme[]>("load_user_themes");
 
+export const setChecked = (group: string, value: string) =>
+  invoke<void>("set_checked", { group, value });
+
 export const setRecent = (paths: string[]) => invoke<void>("set_recent", { paths });

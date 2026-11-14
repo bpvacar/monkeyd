@@ -3,7 +3,7 @@ use std::fs;
 use std::path::Path;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Mutex;
-use tauri::menu::{AboutMetadata, Menu, MenuItem, PredefinedMenuItem, Submenu};
+use tauri::menu::{AboutMetadata, CheckMenuItem, Menu, MenuItem, PredefinedMenuItem, Submenu};
 use tauri::{Emitter, Manager, State};
 
 /// Files the OS asked us to open before the frontend was ready.
@@ -17,6 +17,9 @@ struct QuitGuard(AtomicBool);
 
 /// File ▸ Open Recent, refilled by the frontend whenever its list changes.
 struct RecentMenu(Submenu<tauri::Wry>);
+
+/// Radio-style check items (`group:value` ids) whose tick follows the frontend's settings.
+struct CheckItems(Vec<CheckMenuItem<tauri::Wry>>);
 
 #[derive(Serialize)]
 struct DirEntry {
@@ -469,6 +472,18 @@ fn set_recent(app: tauri::AppHandle, paths: Vec<String>) -> Result<(), String> {
         .map_err(err)
 }
 
+/// Ticks `group:value` and unticks the rest of its group (macOS toggles a check item on click).
+#[tauri::command]
+fn set_checked(app: tauri::AppHandle, group: String, value: String) {
+    let want = format!("{group}:{value}");
+    for item in &app.state::<CheckItems>().0 {
+        let id = item.id().as_ref();
+        if id.starts_with(&format!("{group}:")) {
+            let _ = item.set_checked(id == want);
+        }
+    }
+}
+
 #[tauri::command]
 fn arm_quit_guard(state: State<QuitGuard>) {
     state.0.store(true, Ordering::SeqCst);
@@ -502,7 +517,10 @@ fn queue_and_notify(app: &tauri::AppHandle, paths: Vec<String>) {
 
 /// The macOS menu bar. Our items reach the frontend as a "menu" event with
 /// their id (see `actions` in App.tsx); accelerators mirror its shortcuts.
-fn build_menu(app: &tauri::App) -> tauri::Result<(Menu<tauri::Wry>, Submenu<tauri::Wry>)> {
+#[allow(clippy::type_complexity)]
+fn build_menu(
+    app: &tauri::App,
+) -> tauri::Result<(Menu<tauri::Wry>, Submenu<tauri::Wry>, Vec<CheckMenuItem<tauri::Wry>>)> {
     let item = |id: &str, label: &str, accel: Option<&str>| {
         MenuItem::with_id(app, id, label, true, accel)
     };
@@ -584,9 +602,43 @@ fn build_menu(app: &tauri::App) -> tauri::Result<(Menu<tauri::Wry>, Submenu<taur
             &item("find", "Find…", Some("CmdOrCtrl+F"))?,
             &item("find-next", "Find Next", Some("CmdOrCtrl+G"))?,
             &item("find-previous", "Find Previous", Some("CmdOrCtrl+Shift+G"))?,
+            &item("find-replace", "Find and Replace…", Some("CmdOrCtrl+Alt+F"))?,
             &item("use-selection", "Use Selection for Find", Some("CmdOrCtrl+E"))?,
         ],
     )?;
+    let format = Submenu::with_items(
+        app,
+        "Format",
+        true,
+        &[
+            &item("format:bold", "Bold", Some("CmdOrCtrl+B"))?,
+            &item("format:italic", "Italic", Some("CmdOrCtrl+I"))?,
+            &item("format:code", "Inline Code", None)?,
+            &item("format:link", "Link…", Some("CmdOrCtrl+K"))?,
+            &sep()?,
+            &item("format:h1", "Heading 1", Some("CmdOrCtrl+Alt+1"))?,
+            &item("format:h2", "Heading 2", Some("CmdOrCtrl+Alt+2"))?,
+            &item("format:h3", "Heading 3", Some("CmdOrCtrl+Alt+3"))?,
+            &item("format:h4", "Heading 4", Some("CmdOrCtrl+Alt+4"))?,
+            &item("format:h5", "Heading 5", Some("CmdOrCtrl+Alt+5"))?,
+            &item("format:h6", "Heading 6", Some("CmdOrCtrl+Alt+6"))?,
+            &sep()?,
+            &item("format:quote", "Quote", None)?,
+        ],
+    )?;
+
+    let check = |id: &str, label: &str| CheckMenuItem::with_id(app, id, label, true, false, None::<&str>);
+    let checks = vec![
+        check("theme:system", "Match System")?,
+        check("theme:light", "Light")?,
+        check("theme:dark", "Dark")?,
+        check("width:narrow", "Narrow")?,
+        check("width:standard", "Standard")?,
+        check("width:wide", "Wide")?,
+        check("width:full", "Full Width")?,
+    ];
+    let appearance = Submenu::with_items(app, "Appearance", true, &[&checks[0], &checks[1], &checks[2]])?;
+    let width = Submenu::with_items(app, "Editor Width", true, &[&checks[3], &checks[4], &checks[5], &checks[6]])?;
     let view = Submenu::with_items(
         app,
         "View",
@@ -594,6 +646,13 @@ fn build_menu(app: &tauri::App) -> tauri::Result<(Menu<tauri::Wry>, Submenu<taur
         &[
             &item("toggle-mode", "Toggle Markdown Source", Some("CmdOrCtrl+Shift+E"))?,
             &item("toggle-sidebar", "Toggle Sidebar", Some("CmdOrCtrl+\\"))?,
+            &sep()?,
+            &item("zoom-reset", "Actual Size", Some("CmdOrCtrl+0"))?,
+            &item("zoom-in", "Zoom In", Some("CmdOrCtrl+="))?,
+            &item("zoom-out", "Zoom Out", Some("CmdOrCtrl+-"))?,
+            &sep()?,
+            &appearance,
+            &width,
             &sep()?,
             &PredefinedMenuItem::fullscreen(app, None)?,
         ],
@@ -626,8 +685,8 @@ fn build_menu(app: &tauri::App) -> tauri::Result<(Menu<tauri::Wry>, Submenu<taur
         window.set_as_windows_menu_for_nsapp()?;
         help.set_as_help_menu_for_nsapp()?;
     }
-    let menu = Menu::with_items(app, &[&app_menu, &file, &edit, &view, &window, &help])?;
-    Ok((menu, recent))
+    let menu = Menu::with_items(app, &[&app_menu, &file, &edit, &format, &view, &window, &help])?;
+    Ok((menu, recent, checks))
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -675,11 +734,13 @@ pub fn run() {
             load_user_themes,
             arm_quit_guard,
             set_recent,
+            set_checked,
             quit
         ])
         .setup(|app| {
-            let (menu, recent) = build_menu(app)?;
+            let (menu, recent, checks) = build_menu(app)?;
             app.manage(RecentMenu(recent));
+            app.manage(CheckItems(checks));
             app.set_menu(menu)?;
 
             let args: Vec<String> = std::env::args()

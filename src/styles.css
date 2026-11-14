@@ -837,13 +837,24 @@ button:focus-visible, [tabindex]:focus-visible {
 /* ---------- find bar (⌘F) ---------- */
 .find-bar {
   display: flex;
-  align-items: center;
-  gap: 4px;
+  flex-direction: column;
+  gap: 6px;
   flex: none;
   padding: 6px 10px 6px 14px;
   background: var(--chrome);
   border-bottom: 1px solid var(--line);
 }
+.find-row { display: flex; align-items: center; gap: 4px; }
+.find-action {
+  height: 26px;
+  padding: 0 10px;
+  border-radius: var(--radius);
+  font-size: 12px;
+  color: var(--ink);
+  background: var(--chrome-2);
+}
+.find-action:hover:not(:disabled) { background: var(--chrome-3); }
+.find-action:disabled { opacity: .45; }
 .find-bar input {
   flex: 0 1 280px;
   min-width: 0;

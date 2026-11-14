@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useState } from "react";
 import { listen } from "@tauri-apps/api/event";
-import { useStore } from "./store";
-import { armQuitGuard, getPendingFiles, loadUserThemes, quit } from "./lib/backend";
+import { useStore, type EditorWidth, type ThemePref } from "./store";
+import { getCurrentWebview } from "@tauri-apps/api/webview";
+import type { Format } from "./lib/format";
+import { armQuitGuard, getPendingFiles, loadUserThemes, quit, setChecked } from "./lib/backend";
 import {
   saveTab,
   saveActiveTab,
@@ -44,7 +46,12 @@ function useTheme() {
 
   useEffect(() => {
     document.documentElement.dataset.width = editorWidth;
+    setChecked("width", editorWidth).catch(() => {});
   }, [editorWidth]);
+
+  useEffect(() => {
+    setChecked("theme", theme).catch(() => {});
+  }, [theme]);
 
   useEffect(() => {
     const mq = window.matchMedia("(prefers-color-scheme: dark)");
@@ -198,6 +205,10 @@ const actions: Record<string, () => void> = {
   },
   "unused-images": () => useStore.getState().setUnusedImagesOpen(true),
   "clear-recent": clearRecent,
+  "find-replace": () => findCommand("replace"),
+  "zoom-in": () => zoomBy(1.1),
+  "zoom-out": () => zoomBy(1 / 1.1),
+  "zoom-reset": () => zoomBy(0),
   "next-tab": () => cycleTab(1),
   "prev-tab": () => cycleTab(-1),
   "export-pdf": exportActivePdf,
@@ -228,6 +239,37 @@ const actions: Record<string, () => void> = {
   help: () => openUrl("https://github.com/bpvacar/monkeyd"),
 };
 
+const ZOOM_KEY = "zoom";
+
+/** Whole-window zoom, like Safari's; `0` resets, `1` just re-applies the saved level. */
+function zoomBy(factor: number) {
+  const now = Number(localStorage.getItem(ZOOM_KEY) ?? 1) || 1;
+  const z = factor === 0 ? 1 : Math.min(3, Math.max(0.5, Math.round(now * factor * 100) / 100));
+  localStorage.setItem(ZOOM_KEY, String(z));
+  try {
+    getCurrentWebview().setZoom(z).catch(() => {});
+  } catch {
+    // no Tauri webview (the Vite preview in a plain browser)
+  }
+}
+
+/** Menu ids are `name` or `group:value` (format:bold, theme:dark, width:wide, recent:/path). */
+function runAction(id: string) {
+  const colon = id.indexOf(":");
+  if (colon === -1) return actions[id]?.();
+  const group = id.slice(0, colon);
+  const value = id.slice(colon + 1);
+  const s = useStore.getState();
+  if (group === "recent") s.openPath(value);
+  else if (group === "format") s.formatTarget?.(value as Format);
+  else if (group === "theme" || group === "width") {
+    if (group === "theme") s.setTheme(value as ThemePref);
+    else s.setEditorWidth(value as EditorWidth);
+    // macOS flips a check item on click; re-tick in case the same value was picked again
+    setChecked(group, value).catch(() => {});
+  }
+}
+
 function cycleTab(step: number) {
   const s = useStore.getState();
   const i = s.tabs.findIndex((t) => t.id === s.activeTabId);
@@ -247,6 +289,13 @@ const SHORTCUTS: Record<string, string> = {
   o: "open",
   "⇧o": "open-folder",
   s: "save",
+  b: "format:bold",
+  i: "format:italic",
+  k: "format:link",
+  "=": "zoom-in",
+  "⇧+": "zoom-in",
+  "-": "zoom-out",
+  "0": "zoom-reset",
   "⇧s": "save-as",
   p: "export-pdf",
   w: "close-tab",
@@ -271,6 +320,19 @@ function useShortcuts() {
         return cycleTab(e.shiftKey ? -1 : 1);
       }
       if (!e.metaKey) return;
+      // ⌥ changes e.key ("¡", "ƒ"), so ⌥⌘ shortcuts go by physical key
+      if (e.altKey) {
+        const digit = /^(Digit|Numpad)([1-6])$/.exec(e.code)?.[2];
+        const id = digit
+          ? `format:h${digit}`
+          : e.code === "KeyF"
+            ? "find-replace"
+            : null;
+        if (!id) return;
+        e.preventDefault();
+        e.stopPropagation();
+        return runAction(id);
+      }
       if (/^[1-9]$/.test(e.key) && !e.shiftKey) {
         e.preventDefault();
         const { tabs, setActive } = useStore.getState();
@@ -282,14 +344,12 @@ function useShortcuts() {
       if (!id) return;
       e.preventDefault();
       e.stopPropagation();
-      actions[id]();
+      runAction(id);
     };
     window.addEventListener("keydown", onKey, true);
     rememberRecent();
-    const unlisten = listen<string>("menu", ({ payload: id }) => {
-      if (id.startsWith("recent:")) useStore.getState().openPath(id.slice("recent:".length));
-      else actions[id]?.();
-    });
+    zoomBy(1);
+    const unlisten = listen<string>("menu", ({ payload: id }) => runAction(id));
     return () => {
       window.removeEventListener("keydown", onKey, true);
       unlisten.then((fn) => fn());
