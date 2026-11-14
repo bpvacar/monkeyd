@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import { ask } from "@tauri-apps/plugin-dialog";
 import * as backend from "./lib/backend";
+import type { FindTarget } from "./lib/find";
 
 export type ViewMode = "wysiwyg" | "source";
 export type ThemePref = "system" | "light" | "dark";
@@ -48,6 +49,8 @@ interface AppState {
   attachmentFolder: string;
   imageMaxEdge: number;
   pluginsPanelOpen: boolean;
+  /** The mounted editor the find bar searches, if any. */
+  findTarget: FindTarget | null;
   toast: string | null;
   prompt: PromptRequest | null;
   treeVersion: number;
@@ -69,6 +72,7 @@ interface AppState {
   setAttachmentFolder: (folder: string) => void;
   setImageMaxEdge: (px: number) => void;
   setPluginsPanelOpen: (open: boolean) => void;
+  setFindTarget: (t: FindTarget | null) => void;
   showToast: (msg: string) => void;
   askName: (opts: Omit<PromptRequest, "resolve">) => Promise<string | null>;
   resolvePrompt: (value: string | null) => void;
@@ -91,6 +95,7 @@ export const useStore = create<AppState>((set, get) => ({
   attachmentFolder: localStorage.getItem("attachmentFolder") ?? "assets",
   imageMaxEdge: Number(localStorage.getItem("imageMaxEdge") ?? 2560),
   pluginsPanelOpen: false,
+  findTarget: null,
   toast: null,
   prompt: null,
   treeVersion: 0,
@@ -238,6 +243,7 @@ export const useStore = create<AppState>((set, get) => ({
   },
 
   setPluginsPanelOpen: (open) => set({ pluginsPanelOpen: open }),
+  setFindTarget: (findTarget) => set({ findTarget }),
 
   askName: (opts) =>
     new Promise<string | null>((resolve) => {

@@ -3,6 +3,7 @@ use std::fs;
 use std::path::Path;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Mutex;
+use tauri::menu::{AboutMetadata, Menu, MenuItem, PredefinedMenuItem, Submenu};
 use tauri::{Emitter, Manager, State};
 
 /// Files the OS asked us to open before the frontend was ready.
@@ -476,6 +477,116 @@ fn queue_and_notify(app: &tauri::AppHandle, paths: Vec<String>) {
     let _ = app.emit("files-pending", ());
 }
 
+/// The macOS menu bar. Our items reach the frontend as a "menu" event with
+/// their id (see `actions` in App.tsx); accelerators mirror its shortcuts.
+fn build_menu(app: &tauri::App) -> tauri::Result<Menu<tauri::Wry>> {
+    let item = |id: &str, label: &str, accel: Option<&str>| {
+        MenuItem::with_id(app, id, label, true, accel)
+    };
+    let sep = || PredefinedMenuItem::separator(app);
+    let info = app.package_info();
+    let about = AboutMetadata {
+        name: Some("MonkeyD".into()),
+        version: Some(info.version.to_string()),
+        copyright: app.config().bundle.copyright.clone(),
+        ..Default::default()
+    };
+
+    let app_menu = Submenu::with_items(
+        app,
+        "MonkeyD",
+        true,
+        &[
+            &PredefinedMenuItem::about(app, None, Some(about))?,
+            &sep()?,
+            &item("settings", "Settings…", Some("CmdOrCtrl+,"))?,
+            &sep()?,
+            &PredefinedMenuItem::services(app, None)?,
+            &sep()?,
+            &PredefinedMenuItem::hide(app, None)?,
+            &PredefinedMenuItem::hide_others(app, None)?,
+            &PredefinedMenuItem::show_all(app, None)?,
+            &sep()?,
+            // the stock Quit terminates on the spot (macOS gives no hook to
+            // veto it), so ours asks the frontend to save first
+            &item("quit", "Quit MonkeyD", Some("CmdOrCtrl+Q"))?,
+        ],
+    )?;
+    let file = Submenu::with_items(
+        app,
+        "File",
+        true,
+        &[
+            &item("new-tab", "New Tab", Some("CmdOrCtrl+N"))?,
+            &item("new-file", "New File…", Some("CmdOrCtrl+Shift+N"))?,
+            &item("new-folder", "New Folder…", None)?,
+            &sep()?,
+            &item("open", "Open…", Some("CmdOrCtrl+O"))?,
+            &item("open-folder", "Open Folder…", Some("CmdOrCtrl+Shift+O"))?,
+            &sep()?,
+            &item("save", "Save", Some("CmdOrCtrl+S"))?,
+            &item("export-pdf", "Export as PDF…", Some("CmdOrCtrl+P"))?,
+            &item("export-html", "Export as HTML…", None)?,
+            &sep()?,
+            &item("rename", "Rename…", None)?,
+            &item("reveal", "Reveal in Finder", None)?,
+            &item("trash", "Move to Trash", None)?,
+            &sep()?,
+            &item("close-tab", "Close Tab", Some("CmdOrCtrl+W"))?,
+        ],
+    )?;
+    let edit = Submenu::with_items(
+        app,
+        "Edit",
+        true,
+        &[
+            &PredefinedMenuItem::undo(app, None)?,
+            &PredefinedMenuItem::redo(app, None)?,
+            &sep()?,
+            &PredefinedMenuItem::cut(app, None)?,
+            &PredefinedMenuItem::copy(app, None)?,
+            &PredefinedMenuItem::paste(app, None)?,
+            &PredefinedMenuItem::select_all(app, None)?,
+            &sep()?,
+            &item("find", "Find…", Some("CmdOrCtrl+F"))?,
+            &item("find-next", "Find Next", Some("CmdOrCtrl+G"))?,
+            &item("find-previous", "Find Previous", Some("CmdOrCtrl+Shift+G"))?,
+        ],
+    )?;
+    let view = Submenu::with_items(
+        app,
+        "View",
+        true,
+        &[
+            &item("toggle-mode", "Toggle Markdown Source", Some("CmdOrCtrl+E"))?,
+            &item("toggle-sidebar", "Toggle Sidebar", Some("CmdOrCtrl+\\"))?,
+            &sep()?,
+            &PredefinedMenuItem::fullscreen(app, None)?,
+        ],
+    )?;
+    let window = Submenu::with_items(
+        app,
+        "Window",
+        true,
+        &[
+            &PredefinedMenuItem::minimize(app, None)?,
+            &PredefinedMenuItem::maximize(app, None)?,
+        ],
+    )?;
+    let help = Submenu::with_items(
+        app,
+        "Help",
+        true,
+        &[&item("help", "MonkeyD on GitHub", None)?],
+    )?;
+    #[cfg(target_os = "macos")]
+    {
+        window.set_as_windows_menu_for_nsapp()?;
+        help.set_as_help_menu_for_nsapp()?;
+    }
+    Menu::with_items(app, &[&app_menu, &file, &edit, &view, &window, &help])
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -484,8 +595,15 @@ pub fn run() {
         .manage(PendingFiles::default())
         .manage(QuitGuard::default())
         .on_menu_event(|app, event| {
-            if event.id() == "quit" && !request_quit(app) {
-                app.exit(0);
+            match event.id().as_ref() {
+                "quit" => {
+                    if !request_quit(app) {
+                        app.exit(0);
+                    }
+                }
+                id => {
+                    let _ = app.emit("menu", id);
+                }
             }
         })
         .on_window_event(|window, event| {
@@ -516,22 +634,7 @@ pub fn run() {
             quit
         ])
         .setup(|app| {
-            // The stock Quit item terminates on the spot (macOS gives no hook
-            // to veto it), so swap it for one that asks the frontend first.
-            let menu = tauri::menu::Menu::default(app.handle())?;
-            if let Some(tauri::menu::MenuItemKind::Submenu(app_menu)) =
-                menu.items()?.into_iter().next()
-            {
-                let last = app_menu.items()?.len() - 1;
-                app_menu.remove_at(last)?;
-                app_menu.append(&tauri::menu::MenuItem::with_id(
-                    app,
-                    "quit",
-                    "Quit MonkeyD",
-                    true,
-                    Some("CmdOrCtrl+Q"),
-                )?)?;
-            }
+            let menu = build_menu(app)?;
             app.set_menu(menu)?;
 
             let args: Vec<String> = std::env::args()

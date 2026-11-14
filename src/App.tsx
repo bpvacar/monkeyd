@@ -9,8 +9,16 @@ import {
   openFileDialog,
   openFolderDialog,
   exportActivePdf,
+  exportActiveHtml,
   newFileIn,
+  newFolderIn,
+  renameEntry,
+  revealEntry,
+  trashEntry,
 } from "./lib/fileops";
+import { openUrl } from "@tauri-apps/plugin-opener";
+import { findCommand } from "./lib/find";
+import FindBar from "./components/FindBar";
 import { initPlugins, notifyFileOpen } from "./plugins/runtime";
 import { checkTabsAgainstDisk } from "./lib/sync";
 import Toolbar from "./components/Toolbar";
@@ -176,50 +184,87 @@ function useQuitGuard() {
   }, []);
 }
 
+/** One action per id, shared by the keyboard shortcuts and the native menu. */
+const actions: Record<string, () => void> = {
+  "new-tab": () => useStore.getState().newTab(),
+  // a real file in the workspace, named; plain ⌘N stays a scratch tab
+  "new-file": () => {
+    const s = useStore.getState();
+    if (s.workspace) newFileIn(s.workspace);
+    else s.newTab();
+  },
+  "new-folder": () => {
+    const ws = useStore.getState().workspace;
+    if (ws) newFolderIn(ws);
+  },
+  open: openFileDialog,
+  "open-folder": openFolderDialog,
+  save: saveActiveTab,
+  "export-pdf": exportActivePdf,
+  "export-html": exportActiveHtml,
+  rename: () => withActivePath(renameEntry),
+  reveal: () => withActivePath(revealEntry),
+  trash: () => withActivePath(trashEntry),
+  "close-tab": () => {
+    const s = useStore.getState();
+    if (s.activeTabId) s.closeTab(s.activeTabId);
+  },
+  "toggle-mode": () => {
+    const s = useStore.getState();
+    const tab = s.activeTab();
+    if (tab) s.setMode(tab.mode === "wysiwyg" ? "source" : "wysiwyg");
+  },
+  "toggle-sidebar": () => useStore.getState().toggleSidebar(),
+  // ⌘, is the macOS convention for settings
+  settings: () => {
+    const s = useStore.getState();
+    s.setPluginsPanelOpen(!s.pluginsPanelOpen);
+  },
+  find: () => findCommand(0),
+  "find-next": () => findCommand(1),
+  "find-previous": () => findCommand(-1),
+  help: () => openUrl("https://github.com/bpvacar/monkeyd"),
+};
+
+function withActivePath(fn: (path: string) => unknown) {
+  const path = useStore.getState().activeTab()?.path;
+  if (path) fn(path);
+}
+
+/** ⌘-key → action id; ⇧ is spelled as a prefix. Mirrored as accelerators in the Rust menu. */
+const SHORTCUTS: Record<string, string> = {
+  n: "new-tab",
+  "⇧n": "new-file",
+  o: "open",
+  "⇧o": "open-folder",
+  s: "save",
+  p: "export-pdf",
+  w: "close-tab",
+  e: "toggle-mode",
+  "\\": "toggle-sidebar",
+  ",": "settings",
+  f: "find",
+  g: "find-next",
+  "⇧g": "find-previous",
+};
+
 function useShortcuts() {
   useEffect(() => {
+    // Handling the key here (and preventing default) keeps WebKit from also
+    // firing the menu item with the same accelerator.
     const onKey = (e: KeyboardEvent) => {
       if (!e.metaKey) return;
-      const s = useStore.getState();
-      const k = e.key.toLowerCase();
-      if (k === "s") {
-        e.preventDefault();
-        saveActiveTab();
-      } else if (k === "n" && e.shiftKey) {
-        // a real file in the workspace, named; plain ⌘N stays a scratch tab
-        e.preventDefault();
-        if (s.workspace) newFileIn(s.workspace);
-        else s.newTab();
-      } else if (k === "n") {
-        e.preventDefault();
-        s.newTab();
-      } else if (k === "o" && e.shiftKey) {
-        e.preventDefault();
-        openFolderDialog();
-      } else if (k === "o") {
-        e.preventDefault();
-        openFileDialog();
-      } else if (k === "w") {
-        e.preventDefault();
-        if (s.activeTabId) s.closeTab(s.activeTabId);
-      } else if (k === "e") {
-        e.preventDefault();
-        const tab = s.activeTab();
-        if (tab) s.setMode(tab.mode === "wysiwyg" ? "source" : "wysiwyg");
-      } else if (k === "p") {
-        e.preventDefault();
-        exportActivePdf();
-      } else if (k === "\\") {
-        e.preventDefault();
-        s.toggleSidebar();
-      } else if (k === ",") {
-        // the macOS convention for settings
-        e.preventDefault();
-        s.setPluginsPanelOpen(!s.pluginsPanelOpen);
-      }
+      const id = SHORTCUTS[(e.shiftKey ? "⇧" : "") + e.key.toLowerCase()];
+      if (!id) return;
+      e.preventDefault();
+      actions[id]();
     };
     window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
+    const unlisten = listen<string>("menu", (e) => actions[e.payload]?.());
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      unlisten.then((fn) => fn());
+    };
   }, []);
 }
 
@@ -302,6 +347,7 @@ export default function App() {
       <div className="main">
         <TabBar />
         <ConflictBar />
+        <FindBar />
         {pluginsReady ? <EditorPane /> : null}
       </div>
       <StatusBar />
