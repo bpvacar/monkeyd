@@ -5,6 +5,8 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Mutex;
 use tauri::menu::{AboutMetadata, CheckMenuItem, Menu, MenuItem, PredefinedMenuItem, Submenu};
 use tauri::{Emitter, Manager, State};
+use tauri_plugin_dialog::{DialogExt, MessageDialogButtons, MessageDialogKind};
+use tauri_plugin_updater::UpdaterExt;
 
 /// Files the OS asked us to open before the frontend was ready.
 #[derive(Default)]
@@ -14,6 +16,11 @@ struct PendingFiles(Mutex<Vec<String>>);
 /// can't lose any edits, and a frontend that never loaded can't block quit.
 #[derive(Default)]
 struct QuitGuard(AtomicBool);
+
+/// Set when the user picks "Restart Now" after an update, so the quit that
+/// follows relaunches the app instead of just exiting.
+#[derive(Default)]
+struct RelaunchOnQuit(AtomicBool);
 
 /// File ▸ Open Recent, refilled by the frontend whenever its list changes.
 struct RecentMenu(Submenu<tauri::Wry>);
@@ -492,7 +499,74 @@ fn arm_quit_guard(state: State<QuitGuard>) {
 /// Called by the frontend once unsaved tabs are dealt with.
 #[tauri::command]
 fn quit(app: tauri::AppHandle) {
-    app.exit(0);
+    if app.state::<RelaunchOnQuit>().0.load(Ordering::SeqCst) {
+        app.restart();
+    } else {
+        app.exit(0);
+    }
+}
+
+/// Shows a two-button dialog off the async runtime and returns the choice.
+async fn ask(app: &tauri::AppHandle, kind: MessageDialogKind, title: &str, msg: String, ok: &str, cancel: &str) -> bool {
+    let dialog = app
+        .dialog()
+        .message(msg)
+        .title(title)
+        .kind(kind)
+        .buttons(MessageDialogButtons::OkCancelCustom(ok.into(), cancel.into()));
+    tauri::async_runtime::spawn_blocking(move || dialog.blocking_show())
+        .await
+        .unwrap_or(false)
+}
+
+fn tell(app: &tauri::AppHandle, kind: MessageDialogKind, title: &str, msg: String) {
+    app.dialog().message(msg).title(title).kind(kind).show(|_| {});
+}
+
+/// Looks for a newer release on GitHub; offers to install it, then to restart.
+/// The automatic check at launch stays silent unless there is an update.
+async fn check_for_updates(app: tauri::AppHandle, manual: bool) {
+    let current = app.package_info().version.to_string();
+    let found = match app.updater() {
+        Ok(updater) => updater.check().await,
+        Err(e) => Err(e),
+    };
+    let update = match found {
+        Ok(Some(update)) => update,
+        Ok(None) => {
+            if manual {
+                tell(&app, MessageDialogKind::Info, "You're up to date",
+                    format!("MonkeyD {current} is the latest version."));
+            }
+            return;
+        }
+        Err(e) => {
+            if manual {
+                tell(&app, MessageDialogKind::Error, "Couldn't check for updates", e.to_string());
+            }
+            return;
+        }
+    };
+
+    let install = ask(&app, MessageDialogKind::Info, "Update available",
+        format!("MonkeyD {} is available. You have {current}.", update.version),
+        "Install Update", "Later").await;
+    if !install {
+        return;
+    }
+    if let Err(e) = update.download_and_install(|_, _| {}, || {}).await {
+        tell(&app, MessageDialogKind::Error, "Update failed", e.to_string());
+        return;
+    }
+    let restart = ask(&app, MessageDialogKind::Info, "Update installed",
+        format!("MonkeyD {} will open the next time you start the app.", update.version),
+        "Restart Now", "Later").await;
+    if restart {
+        app.state::<RelaunchOnQuit>().0.store(true, Ordering::SeqCst);
+        if !request_quit(&app) {
+            app.restart();
+        }
+    }
 }
 
 /// ⌘Q and the window's close button land here: the frontend saves what it
@@ -539,6 +613,7 @@ fn build_menu(
         true,
         &[
             &PredefinedMenuItem::about(app, None, Some(about))?,
+            &item("check-updates", "Check for Updates…", None)?,
             &sep()?,
             &item("settings", "Settings…", Some("CmdOrCtrl+,"))?,
             &sep()?,
@@ -694,11 +769,17 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .manage(PendingFiles::default())
         .manage(QuitGuard::default())
+        .manage(RelaunchOnQuit::default())
         .on_menu_event(|app, event| {
             match event.id().as_ref() {
+                "check-updates" => {
+                    tauri::async_runtime::spawn(check_for_updates(app.clone(), true));
+                }
                 "quit" => {
+                    app.state::<RelaunchOnQuit>().0.store(false, Ordering::SeqCst);
                     if !request_quit(app) {
                         app.exit(0);
                     }
@@ -710,6 +791,7 @@ pub fn run() {
         })
         .on_window_event(|window, event| {
             if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                window.state::<RelaunchOnQuit>().0.store(false, Ordering::SeqCst);
                 if request_quit(window.app_handle()) {
                     api.prevent_close();
                 }
@@ -748,6 +830,10 @@ pub fn run() {
                 .filter(|a| !a.starts_with('-') && Path::new(a).exists())
                 .collect();
             queue_and_notify(app.handle(), args);
+
+            if !cfg!(debug_assertions) {
+                tauri::async_runtime::spawn(check_for_updates(app.handle().clone(), false));
+            }
             Ok(())
         })
         .build(tauri::generate_context!())

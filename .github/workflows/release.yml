@@ -38,6 +38,10 @@ jobs:
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Signs MonkeyD_universal.app.tar.gz so installed copies accept it as
+          # an update; tauri-action then publishes latest.json for the updater.
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
           args: --target universal-apple-darwin
           tagName: ${{ github.ref_name }}
@@ -45,7 +49,10 @@ jobs:
           releaseBody: |
             Universal macOS build (Apple Silicon + Intel).
 
-            **Not yet notarized** — on first launch, right-click MonkeyD → Open → Open,
-            or run `xattr -dr com.apple.quarantine /Applications/MonkeyD.app`.
+            Install with Homebrew: `brew install bpvacar/tap/monkeyd`.
+            Installed copies update themselves (MonkeyD → Check for Updates…).
+
+            **Not notarized** — if you install the DMG by hand, on first launch right-click
+            MonkeyD → Open → Open, or run `xattr -dr com.apple.quarantine /Applications/MonkeyD.app`.
           releaseDraft: false
           prerelease: false
