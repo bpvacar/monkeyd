@@ -33,8 +33,11 @@ function findTargetFor(view: EditorView): FindTarget {
     show(q, _ms, cur) {
       if (!searchPanelOpen(view.state)) openSearchPanel(view);
       view.dispatch({
-        effects: setSearchQuery.of(queryOf(q)),
-        ...(cur && { selection: EditorSelection.single(cur.from, cur.to), scrollIntoView: true }),
+        effects: [
+          setSearchQuery.of(queryOf(q)),
+          ...(cur ? [EditorView.scrollIntoView(cur.from, { y: "center" })] : []),
+        ],
+        ...(cur && { selection: EditorSelection.single(cur.from, cur.to) }),
       });
     },
     close() {
