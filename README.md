@@ -21,11 +21,21 @@ See [`docs/MonkeyD-Guide.md`](docs/MonkeyD-Guide.md) for the full user guide.
 
 ## Install
 
-Download the latest `.dmg` from [Releases](../../releases), open it, and drag **MonkeyD** to Applications.
+With [Homebrew](https://brew.sh):
 
-> The app is not yet notarized by Apple, so on first launch macOS Gatekeeper may block it.
-> Right-click the app → **Open** → **Open**, or run `xattr -dr com.apple.quarantine /Applications/MonkeyD.app`.
+```bash
+brew install bpvacar/tap/monkeyd
+```
+
+Or download the latest `.dmg` from [Releases](../../releases), open it, and drag **MonkeyD** to Applications.
+
+> The app is not notarized by Apple. Homebrew takes care of that for you; if you install the
+> DMG by hand, macOS Gatekeeper blocks the first launch. Right-click the app → **Open** → **Open**,
+> or run `xattr -dr com.apple.quarantine /Applications/MonkeyD.app`.
 > Builds are universal (Apple Silicon and Intel).
+
+MonkeyD checks for a new version at launch and offers to install it; you can also use
+**MonkeyD → Check for Updates…**. Updates are signed, and the app refuses any it can't verify.
 
 ## Plugin API
 
