@@ -1,6 +1,8 @@
 import { useEffect, useRef } from "react";
 import { Crepe } from "@milkdown/crepe";
-import { editorViewCtx, editorViewOptionsCtx } from "@milkdown/kit/core";
+import { commandsCtx, editorViewCtx, editorViewOptionsCtx } from "@milkdown/kit/core";
+import { toggleInlineCodeCommand } from "@milkdown/kit/preset/commonmark";
+import { keymap } from "@milkdown/kit/prose/keymap";
 import { Plugin, PluginKey, TextSelection } from "@milkdown/kit/prose/state";
 import { Decoration, DecorationSet, type EditorView } from "@milkdown/kit/prose/view";
 import { $prose } from "@milkdown/kit/utils";
@@ -30,10 +32,19 @@ const findPlugin = $prose(
     })
 );
 
+/** ⌘/ = inline code, the rich-text twin of CodeMirror's ⌘/ comment (⌘E is the Mac's Use Selection for Find). */
+const inlineCodeKey = $prose((ctx) =>
+  keymap({ "Mod-/": () => ctx.get(commandsCtx).call(toggleInlineCodeCommand.key) })
+);
+
 function findTargetFor(view: EditorView): FindTarget {
   return {
     matches: (q) => findInDoc(view.state.doc, q),
     selection: () => view.state.selection,
+    selectedText: () => {
+      const { from, to } = view.state.selection;
+      return view.state.doc.textBetween(from, to, " ");
+    },
     show(_q, ms, cur) {
       const { doc } = view.state;
       const deco = DecorationSet.create(
@@ -87,6 +98,7 @@ export default function WysiwygEditor({ initialContent, onChange }: Props) {
     crepe.editor.use(frontmatter);
     crepe.editor.use(wikilink);
     crepe.editor.use(findPlugin);
+    crepe.editor.use(inlineCodeKey);
 
     // macOS text substitution rewrites what you type — "abcd" arrives as
     // "Abd" — and its suggestion bubble draws over the row below, which in a
@@ -101,6 +113,7 @@ export default function WysiwygEditor({ initialContent, onChange }: Props) {
           autocapitalize: "off",
           autocomplete: "off",
           spellcheck: "false",
+          "aria-label": "Document",
         },
       }));
     });

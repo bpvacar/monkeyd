@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { flushSync } from "react-dom";
 import { useStore } from "../store";
-import { pickMatch, type FindDir } from "../lib/find";
+import { pickMatch, type FindCommand, type FindDir } from "../lib/find";
 
 /** ⌘F bar above the document; driven by `findCommand` (shortcuts and the menu). */
 export default function FindBar() {
@@ -22,7 +22,7 @@ export default function FindBar() {
     [target, query]
   );
 
-  // re-search as you type, and when the editor underneath changes (tab switch, ⌘E)
+  // re-search as you type, and when the editor underneath changes (tab switch, ⇧⌘E)
   // shortcut: edits made in the document while the bar is open aren't re-counted until the next search or step
   useEffect(() => {
     if (open) run(0);
@@ -30,10 +30,13 @@ export default function FindBar() {
 
   useEffect(() => {
     const onFind = (e: Event) => {
-      const dir = (e as CustomEvent<FindDir>).detail;
-      // the tab, not the editor: rich text mounts a beat after ⌘E or a tab switch
+      const cmd = (e as CustomEvent<FindCommand>).detail;
+      // the tab, not the editor: rich text mounts a beat after ⇧⌘E or a tab switch
       if (!useStore.getState().activeTabId) return;
-      if (open && dir) return run(dir);
+      if (cmd === "selection") {
+        const text = target?.selectedText();
+        if (text) setQuery(text);
+      } else if (open && cmd) return run(cmd);
       // render now, not after the next task: the keys typed right after ⌘F
       // would otherwise land in the document
       flushSync(() => setOpen(true));
@@ -41,7 +44,7 @@ export default function FindBar() {
     };
     window.addEventListener("find", onFind);
     return () => window.removeEventListener("find", onFind);
-  }, [open, run]);
+  }, [open, run, target]);
 
   const close = () => {
     setOpen(false);

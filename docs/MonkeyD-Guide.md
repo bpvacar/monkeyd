@@ -14,7 +14,7 @@ There are four ways to get a document open:
 | ----------------------------------------- | --------------------------------------------------------------------------- |
 | **Double-click any `.md` file** in Finder | MonkeyD is registered as an editor for `.md`, `.markdown`, `.mdown`, `.mkd` |
 | **Drag files onto the dock icon**         | Each file opens in its own tab                                              |
-| **⌘O** (or File menu → *Open file…*)      | Standard file picker, multiple selection allowed                            |
+| **⌘O** (or File → *Open…*)      | Standard file picker, multiple selection allowed                            |
 | **⇧⌘O** (or *Open folder…*)               | Opens a folder as a workspace with a file tree in the sidebar               |
 
 With no document open you'll see the **Start writing** screen with the same three actions: new file, open file, open folder.
@@ -25,7 +25,7 @@ With no document open you'll see the **Start writing** screen with the same thre
 
 ```
 ┌────────────────────────────────────────────────────┐
-│ ●●●  [▤] [File]     document.md •     [Aa|</>] [⎙] [⚲] │  ← title bar
+│ ●●●  [▤]         document.md •      [Aa|</>] [⎙] [⚙] │  ← title bar
 ├──────────┬─────────────────────────────────────────┤
 │ sidebar  │  tab1.md  tab2.md  +                    │  ← tab bar
 │ (file    │                                         │
@@ -36,17 +36,17 @@ With no document open you'll see the **Start writing** screen with the same thre
 └────────────────────────────────────────────────────┘
 ```
 
-* **▤** toggles the sidebar (⌘)
+* **▤** toggles the sidebar (⌘\\)
 
-* **File menu** — new, open, save, export
+* **The menu bar** (File, Edit, View, Window, Help) — every command, with its shortcut next to it
 
 * **document title** — shows a blue `•` when there are unsaved changes
 
-* **Aa / `</>`** — switches between rich editing and markdown source (⌘E)
+* **Aa / `</>`** — switches between rich editing and markdown source (⇧⌘E)
 
 * **⎙** — export the current tab as PDF (⌘P)
 
-* **⚲** — opens the *Plugins & appearance* panel (themes, plugins, plugin commands)
+* **Settings button** (the sliders, far right) — opens *Settings* (⌘,): themes, editor width, pasted images, plugins, plugin commands
 
 * **Status bar** — live word count and current mode
 
@@ -78,7 +78,7 @@ Every document is a tab. **⌘N** makes a new untitled tab, **⇧⌘N** creates 
 
 ## 3. Editing: two modes, one document
 
-MonkeyD's core idea is that you can flip between two views of the same document at any time with **⌘E**:
+MonkeyD's core idea is that you can flip between two views of the same document at any time with **⇧⌘E**:
 
 ### Rich text mode (`Aa`)
 
@@ -125,7 +125,7 @@ Saving refuses to run when the file changed underneath it, so an outside edit ca
 
 Copy a screenshot or photo, put the cursor where you want it, and press **⌘V**. MonkeyD writes the image to disk and inserts a normal markdown link — it never embeds a base64 blob in your note.
 
-* **Where it goes**: `<attachment folder>/Pasted image YYYYMMDDHHMMSS.png`, the same filename convention Obsidian uses. The folder is set in **⚲ → Attachments** (default `assets`).
+* **Where it goes**: `<attachment folder>/Pasted image YYYYMMDDHHMMSS.png`, the same filename convention Obsidian uses. The folder is set in **Settings (⌘,) → Attachments** (default `assets`).
 * **What it resolves against**: the open folder (⇧⌘O) when the document lives inside it, otherwise the document's own directory. A file opened from outside your workspace keeps its images next to itself rather than reaching into an unrelated folder.
 * **What gets written**: standard `![](relative/path.png)` — not `![[wikilinks]]` — so the note stays portable across Obsidian, GitHub, and pandoc.
 * Images display in the editor and in PDF export. The markdown on disk always keeps the relative path.
@@ -134,7 +134,7 @@ Works in both rich text and source mode.
 
 ### Image size
 
-macOS puts photos on the clipboard at **full resolution** — a phone photo of a whiteboard arrives as a 40 MB+ PNG. **⚲ → Pasted image size** controls what gets stored:
+macOS puts photos on the clipboard at **full resolution** — a phone photo of a whiteboard arrives as a 40 MB+ PNG. **Settings (⌘,) → Pasted image size** controls what gets stored:
 
 | Setting | Longest edge |
 |---|---|
@@ -149,7 +149,7 @@ Oversized images are scaled down and saved as JPEG (PNG if they carry transparen
 
 Undo (⌘Z) removes the link but can't unwrite the file, so an undone paste leaves an image nothing points at. Deleted notes leave the same trail.
 
-**⚲ → Unused images → Find unused images…** scans every note in the open folder and lists images in the attachment folder that nothing links to, with their sizes. Tick the ones you want gone and they're **moved to the Trash** — never hard-deleted, so a mistake is recoverable.
+**File → Clean Up Unused Images…** scans every note in the open folder and lists images in the attachment folder that nothing links to, with their sizes. Tick the ones you want gone and they're **moved to the Trash** — never hard-deleted, so a mistake is recoverable.
 
 The scan is deliberately cautious: an image counts as used if any note references it by path *or* by bare filename, so Obsidian-style `![[wikilinks]]`, `<img>` tags, `%20`-encoded paths, and `../` links all keep their images safe.
 
@@ -157,11 +157,11 @@ The scan is deliberately cautious: an image counts as used if any note reference
 
 ### PDF (⌘P)
 
-File menu → *Export as PDF…* (or the ⎙ button). The document is rendered through the full pipeline (GFM + KaTeX math + highlighted code) and handed to the **macOS print dialog** — choose **Save as PDF** from the PDF dropdown in the bottom-left corner. You get page size, margins, and orientation control for free.
+File → *Export as PDF…* (or the ⎙ button). The document is rendered through the full pipeline (GFM + KaTeX math + highlighted code) and handed to the **macOS print dialog** — choose **Save as PDF** from the PDF dropdown in the bottom-left corner. You get page size, margins, and orientation control for free.
 
 ### HTML
 
-File menu → *Export as HTML…* produces a single self-contained `.html` file with clean typographic styling — good for sharing or publishing.
+File → *Export as HTML…* produces a single self-contained `.html` file with clean typographic styling — good for sharing or publishing.
 
 Plugins can hook into export (see §7) — e.g. to stamp a footer or rewrite links before rendering.
 
@@ -169,7 +169,7 @@ Plugins can hook into export (see §7) — e.g. to stamp a footer or rewrite lin
 
 ## 6. Appearance & themes
 
-Open the **⚲ Plugins & appearance** panel:
+Open **Settings** (⌘,):
 
 * **Theme**: *Match system*, *Light*, or *Dark*.
 
@@ -218,7 +218,7 @@ Plugins are local JavaScript files that run inside the app at launch.
 
 ### Installing
 
-Drop into the plugins folder (⚲ panel → *Open plugins folder*, or):
+Drop into the plugins folder (Settings → *Open plugins folder*, or):
 
 ```
 ~/Library/Application Support/com.benjaminvaca.monkeyd/plugins/
@@ -233,7 +233,7 @@ Two accepted shapes:
 { "name": "My Plugin", "version": "1.0.0", "description": "What it does" }
 ```
 
-Then **relaunch the app**. Plugins load at startup; each can be toggled on/off in the ⚲ panel (a relaunch applies the change). A plugin that throws on load shows its error in the panel instead of breaking the app.
+Then **relaunch the app**. Plugins load at startup; each can be toggled on/off in Settings (a relaunch applies the change). A plugin that throws on load shows its error in the panel instead of breaking the app.
 
 ### The API
 
@@ -242,7 +242,7 @@ Each plugin's code runs with a global object named `mdeditor` (the API keeps the
 ```js
 mdeditor.version                     // "0.1.0"
 
-// Add an entry under "Plugin commands" in the ⚲ panel
+// Add an entry under "Plugin commands" in Settings
 mdeditor.registerCommand("my-id", {
   title: "Do the thing",
   run() { /* ... */ },
@@ -282,7 +282,10 @@ Already installed as `reading-time.js` — adds a *Show reading time* command th
 | ⇧⌘O      | Open folder as workspace  |
 | ⌘S       | Save                      |
 | ⌘W       | Close tab                 |
-| ⌘E       | Toggle rich text ↔ source |
+| ⇧⌘E      | Toggle rich text ↔ source |
+| ⌘/       | Inline code (rich text) · comment line (source) |
+| ⌘F       | Find (⌘G next, ⇧⌘G previous) |
+| ⌘E       | Use selection for find |
 | ⌘P       | Export as PDF             |
 | ⌘\\      | Toggle sidebar            |
 | ⌘,       | Settings                  |
@@ -322,5 +325,5 @@ Tech stack: Tauri 2 (Rust) · React + TypeScript + Vite · Milkdown Crepe (rich 
 
 * **A file type won't open from Finder** → only `md/markdown/mdown/mkd` are associated; anything else can still be opened via ⌘O (`.txt` included).
 
-* **A plugin shows "Failed to load"** → the error text appears on its card in the ⚲ panel; fix the script and relaunch.
+* **A plugin shows "Failed to load"** → the error text appears on its card in Settings; fix the script and relaunch.
 

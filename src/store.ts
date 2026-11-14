@@ -1,7 +1,7 @@
 import { create } from "zustand";
-import { ask } from "@tauri-apps/plugin-dialog";
 import * as backend from "./lib/backend";
 import type { FindTarget } from "./lib/find";
+import { rememberRecent } from "./lib/recent";
 
 export type ViewMode = "wysiwyg" | "source";
 export type ThemePref = "system" | "light" | "dark";
@@ -15,6 +15,25 @@ export interface PromptRequest {
   /** Selects everything before the extension, the way Finder does. */
   selectBasename?: boolean;
   resolve: (value: string | null) => void;
+}
+
+export interface Toast {
+  text: string;
+  /** Errors stay until dismissed; info fades on its own. */
+  kind: "info" | "error";
+  action?: { label: string; run: () => void };
+}
+
+/** Turns an OS error string into words, keeping the original when it's not a known case. */
+export function explain(e: unknown): string {
+  const raw = String(e);
+  if (/permission denied|not permitted|os error (1|13)\b/i.test(raw))
+    return "MonkeyD doesn't have permission to change it there.";
+  if (/no such file|not found|os error 2\b/i.test(raw))
+    return "It isn't there anymore — it may have been moved or deleted.";
+  if (/already ?exists|os error 17\b/i.test(raw)) return "Something with that name is already there.";
+  if (/no space|os error 28\b/i.test(raw)) return "The disk is full.";
+  return raw;
 }
 
 export interface Tab {
@@ -49,9 +68,10 @@ interface AppState {
   attachmentFolder: string;
   imageMaxEdge: number;
   pluginsPanelOpen: boolean;
+  unusedImagesOpen: boolean;
   /** The mounted editor the find bar searches, if any. */
   findTarget: FindTarget | null;
-  toast: string | null;
+  toast: Toast | null;
   prompt: PromptRequest | null;
   treeVersion: number;
 
@@ -73,7 +93,9 @@ interface AppState {
   setImageMaxEdge: (px: number) => void;
   setPluginsPanelOpen: (open: boolean) => void;
   setFindTarget: (t: FindTarget | null) => void;
-  showToast: (msg: string) => void;
+  setUnusedImagesOpen: (open: boolean) => void;
+  showToast: (text: string, kind?: Toast["kind"], action?: Toast["action"]) => void;
+  dismissToast: () => void;
   askName: (opts: Omit<PromptRequest, "resolve">) => Promise<string | null>;
   resolvePrompt: (value: string | null) => void;
   pathRenamed: (from: string, to: string) => void;
@@ -96,6 +118,7 @@ export const useStore = create<AppState>((set, get) => ({
   imageMaxEdge: Number(localStorage.getItem("imageMaxEdge") ?? 2560),
   pluginsPanelOpen: false,
   findTarget: null,
+  unusedImagesOpen: false,
   toast: null,
   prompt: null,
   treeVersion: 0,
@@ -129,6 +152,7 @@ export const useStore = create<AppState>((set, get) => ({
     try {
       const content = await backend.readTextFile(path);
       const stamp = await backend.fileStamp(path).catch(() => null);
+      rememberRecent(path);
       const tab: Tab = {
         id: makeId(),
         path,
@@ -150,24 +174,14 @@ export const useStore = create<AppState>((set, get) => ({
         return { tabs, activeTabId: tab.id };
       });
     } catch (e) {
-      get().showToast(`Can't open ${fileName(path)}: ${e}`);
+      get().showToast(`Couldn't open “${fileName(path)}”. ${explain(e)}`, "error");
     }
   },
 
   closeTab: async (id) => {
-    const tab = get().tabs.find((t) => t.id === id);
-    // window.confirm is a silent "Cancel" in Tauri's WKWebView; use the native dialog
-    if (
-      tab &&
-      tab.content !== tab.savedContent &&
-      !(await ask(`"${tab.title}" has unsaved changes. Close without saving?`, {
-        kind: "warning",
-        okLabel: "Close",
-        cancelLabel: "Cancel",
-      }))
-    ) {
-      return;
-    }
+    // dynamic: fileops imports this store
+    const { settleUnsaved } = await import("./lib/fileops");
+    if (!(await settleUnsaved(id))) return;
     set((s) => {
       const idx = s.tabs.findIndex((t) => t.id === id);
       const tabs = s.tabs.filter((t) => t.id !== id);
@@ -193,12 +207,14 @@ export const useStore = create<AppState>((set, get) => ({
       ),
     })),
 
-  setTabPath: (id, path) =>
+  setTabPath: (id, path) => {
+    rememberRecent(path);
     set((s) => ({
       tabs: s.tabs.map((t) =>
         t.id === id ? { ...t, path, title: fileName(path) } : t
       ),
-    })),
+    }));
+  },
 
   setMode: (mode) => {
     const active = get().activeTab();
@@ -244,6 +260,7 @@ export const useStore = create<AppState>((set, get) => ({
 
   setPluginsPanelOpen: (open) => set({ pluginsPanelOpen: open }),
   setFindTarget: (findTarget) => set({ findTarget }),
+  setUnusedImagesOpen: (unusedImagesOpen) => set({ unusedImagesOpen }),
 
   askName: (opts) =>
     new Promise<string | null>((resolve) => {
@@ -316,10 +333,14 @@ export const useStore = create<AppState>((set, get) => ({
       ),
     })),
 
-  showToast: (msg) => {
-    set({ toast: msg });
-    window.setTimeout(() => {
-      if (get().toast === msg) set({ toast: null });
-    }, 2600);
+  showToast: (text, kind = "info", action) => {
+    const toast: Toast = { text, kind, action };
+    set({ toast });
+    if (kind === "info") {
+      window.setTimeout(() => {
+        if (get().toast === toast) set({ toast: null });
+      }, 2600);
+    }
   },
+  dismissToast: () => set({ toast: null }),
 }));

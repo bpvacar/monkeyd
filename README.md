@@ -4,14 +4,14 @@
 
 ## Features
 
-- **Two editing modes, toggleable** (`⌘E`): rich WYSIWYG (Milkdown Crepe — type markdown, see it rendered in place) and raw source (CodeMirror 6 with markdown highlighting).
+- **Two editing modes, toggleable** (`⇧⌘E`): rich WYSIWYG (Milkdown Crepe — type markdown, see it rendered in place) and raw source (CodeMirror 6 with markdown highlighting).
 - **Workspace**: open a folder (`⇧⌘O`) for a sidebar file tree; multi-tab editing; autosave.
 - **Opens `.md` files from Finder** — the app registers as an editor for `.md`, `.markdown`, `.mdown`, `.mkd`.
 - **PDF export** (`⌘P`): renders the compiled document (GFM tables, task lists, syntax-highlighted code, KaTeX math) through the system print dialog — choose "Save as PDF". HTML export too.
 - **Paste images** (`⌘V`): screenshots and photos are written into a configurable attachment folder as `Pasted image YYYYMMDDHHMMSS.png` and linked with standard `![](relative/path)` — no base64 blobs, and portable to Obsidian.
 - **Attachment hygiene**: pasted images are downscaled to a configurable limit, and an "unused images" scan finds attachments no note links to and moves them to the Trash.
 - **External-change sync**: open tabs are re-checked against disk; a file edited by another tool is picked up automatically, or flagged with a conflict bar if you had unsaved edits — autosave never silently overwrites someone else's write.
-- **Adjustable writing width**: Narrow / Standard / Wide / Full, in the Plugins & appearance panel.
+- **Adjustable writing width**: Narrow / Standard / Wide / Full, in Settings (⌘,).
 - **Themes**: light / dark / match system, plus custom CSS themes dropped into `<app data>/themes/*.css`.
 - **Plugins**: JavaScript files in `<app data>/plugins/` (a `name.js` file, or a folder with `index.js` + optional `plugin.json`). See `examples/plugins/reading-time.js`.
 
@@ -44,7 +44,7 @@ permissions (they can read and write any file), so only install code you trust.
 
 ## Keyboard shortcuts
 
-`⌘N` new · `⌘O` open file · `⇧⌘O` open folder · `⌘S` save · `⌘W` close tab · `⌘E` toggle WYSIWYG/source · `⌘P` export PDF · `⌘\` toggle sidebar · `⌘,` settings
+`⌘N` new · `⌘O` open file · `⇧⌘O` open folder · `⌘S` save · `⌘W` close tab · `⇧⌘E` toggle WYSIWYG/source · `⌘F` find · `⌘E` use selection for find · `⌘/` inline code (rich) / comment (source) · `⌘P` export PDF · `⌘\` toggle sidebar · `⌘,` settings
 
 ## Development
 

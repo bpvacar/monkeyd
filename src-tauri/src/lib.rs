@@ -15,6 +15,9 @@ struct PendingFiles(Mutex<Vec<String>>);
 #[derive(Default)]
 struct QuitGuard(AtomicBool);
 
+/// File ▸ Open Recent, refilled by the frontend whenever its list changes.
+struct RecentMenu(Submenu<tauri::Wry>);
+
 #[derive(Serialize)]
 struct DirEntry {
     name: String,
@@ -446,6 +449,26 @@ fn load_user_themes(app: tauri::AppHandle) -> Result<Vec<UserTheme>, String> {
     Ok(themes)
 }
 
+/// Items carry `recent:<path>` ids, which the frontend opens.
+#[tauri::command]
+fn set_recent(app: tauri::AppHandle, paths: Vec<String>) -> Result<(), String> {
+    let menu = &app.state::<RecentMenu>().0;
+    let err = |e: tauri::Error| e.to_string();
+    for item in menu.items().map_err(err)? {
+        menu.remove(&item).map_err(err)?;
+    }
+    for p in &paths {
+        let name = Path::new(p).file_name().map_or(p.clone(), |n| n.to_string_lossy().into_owned());
+        menu.append(&MenuItem::with_id(&app, format!("recent:{p}"), name, true, None::<&str>).map_err(err)?)
+            .map_err(err)?;
+    }
+    if !paths.is_empty() {
+        menu.append(&PredefinedMenuItem::separator(&app).map_err(err)?).map_err(err)?;
+    }
+    menu.append(&MenuItem::with_id(&app, "clear-recent", "Clear Menu", !paths.is_empty(), None::<&str>).map_err(err)?)
+        .map_err(err)
+}
+
 #[tauri::command]
 fn arm_quit_guard(state: State<QuitGuard>) {
     state.0.store(true, Ordering::SeqCst);
@@ -479,7 +502,7 @@ fn queue_and_notify(app: &tauri::AppHandle, paths: Vec<String>) {
 
 /// The macOS menu bar. Our items reach the frontend as a "menu" event with
 /// their id (see `actions` in App.tsx); accelerators mirror its shortcuts.
-fn build_menu(app: &tauri::App) -> tauri::Result<Menu<tauri::Wry>> {
+fn build_menu(app: &tauri::App) -> tauri::Result<(Menu<tauri::Wry>, Submenu<tauri::Wry>)> {
     let item = |id: &str, label: &str, accel: Option<&str>| {
         MenuItem::with_id(app, id, label, true, accel)
     };
@@ -512,6 +535,12 @@ fn build_menu(app: &tauri::App) -> tauri::Result<Menu<tauri::Wry>> {
             &item("quit", "Quit MonkeyD", Some("CmdOrCtrl+Q"))?,
         ],
     )?;
+    let recent = Submenu::with_items(
+        app,
+        "Open Recent",
+        true,
+        &[&MenuItem::with_id(app, "clear-recent", "Clear Menu", false, None::<&str>)?],
+    )?;
     let file = Submenu::with_items(
         app,
         "File",
@@ -523,14 +552,18 @@ fn build_menu(app: &tauri::App) -> tauri::Result<Menu<tauri::Wry>> {
             &sep()?,
             &item("open", "Open…", Some("CmdOrCtrl+O"))?,
             &item("open-folder", "Open Folder…", Some("CmdOrCtrl+Shift+O"))?,
+            &recent,
             &sep()?,
             &item("save", "Save", Some("CmdOrCtrl+S"))?,
+            &item("save-as", "Save As…", Some("CmdOrCtrl+Shift+S"))?,
             &item("export-pdf", "Export as PDF…", Some("CmdOrCtrl+P"))?,
             &item("export-html", "Export as HTML…", None)?,
             &sep()?,
             &item("rename", "Rename…", None)?,
             &item("reveal", "Reveal in Finder", None)?,
             &item("trash", "Move to Trash", None)?,
+            &sep()?,
+            &item("unused-images", "Clean Up Unused Images…", None)?,
             &sep()?,
             &item("close-tab", "Close Tab", Some("CmdOrCtrl+W"))?,
         ],
@@ -551,6 +584,7 @@ fn build_menu(app: &tauri::App) -> tauri::Result<Menu<tauri::Wry>> {
             &item("find", "Find…", Some("CmdOrCtrl+F"))?,
             &item("find-next", "Find Next", Some("CmdOrCtrl+G"))?,
             &item("find-previous", "Find Previous", Some("CmdOrCtrl+Shift+G"))?,
+            &item("use-selection", "Use Selection for Find", Some("CmdOrCtrl+E"))?,
         ],
     )?;
     let view = Submenu::with_items(
@@ -558,7 +592,7 @@ fn build_menu(app: &tauri::App) -> tauri::Result<Menu<tauri::Wry>> {
         "View",
         true,
         &[
-            &item("toggle-mode", "Toggle Markdown Source", Some("CmdOrCtrl+E"))?,
+            &item("toggle-mode", "Toggle Markdown Source", Some("CmdOrCtrl+Shift+E"))?,
             &item("toggle-sidebar", "Toggle Sidebar", Some("CmdOrCtrl+\\"))?,
             &sep()?,
             &PredefinedMenuItem::fullscreen(app, None)?,
@@ -571,20 +605,29 @@ fn build_menu(app: &tauri::App) -> tauri::Result<Menu<tauri::Wry>> {
         &[
             &PredefinedMenuItem::minimize(app, None)?,
             &PredefinedMenuItem::maximize(app, None)?,
+            &sep()?,
+            &item("prev-tab", "Show Previous Tab", Some("CmdOrCtrl+Shift+["))?,
+            &item("next-tab", "Show Next Tab", Some("CmdOrCtrl+Shift+]"))?,
+            &sep()?,
+            &PredefinedMenuItem::bring_all_to_front(app, None)?,
         ],
     )?;
     let help = Submenu::with_items(
         app,
         "Help",
         true,
-        &[&item("help", "MonkeyD on GitHub", None)?],
+        &[
+            &item("welcome", "Welcome Guide", None)?,
+            &item("help", "MonkeyD on GitHub", None)?,
+        ],
     )?;
     #[cfg(target_os = "macos")]
     {
         window.set_as_windows_menu_for_nsapp()?;
         help.set_as_help_menu_for_nsapp()?;
     }
-    Menu::with_items(app, &[&app_menu, &file, &edit, &view, &window, &help])
+    let menu = Menu::with_items(app, &[&app_menu, &file, &edit, &view, &window, &help])?;
+    Ok((menu, recent))
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -631,10 +674,12 @@ pub fn run() {
             load_plugins,
             load_user_themes,
             arm_quit_guard,
+            set_recent,
             quit
         ])
         .setup(|app| {
-            let menu = build_menu(app)?;
+            let (menu, recent) = build_menu(app)?;
+            app.manage(RecentMenu(recent));
             app.set_menu(menu)?;
 
             let args: Vec<String> = std::env::args()

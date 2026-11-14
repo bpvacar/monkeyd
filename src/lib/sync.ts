@@ -1,4 +1,4 @@
-import { useStore } from "../store";
+import { explain, useStore } from "../store";
 import * as backend from "./backend";
 import { notifySave } from "../plugins/runtime";
 
@@ -86,7 +86,7 @@ export async function reloadFromDisk(tabId: string): Promise<void> {
     useStore.getState().applyExternalContent(tab.id, content, stamp);
     useStore.getState().showToast(`Reloaded ${tab.title}`);
   } catch (e) {
-    useStore.getState().showToast(String(e));
+    useStore.getState().showToast(`Couldn't reload “${tab.title}”. ${explain(e)}`, "error");
   }
 }
 
@@ -104,6 +104,6 @@ export async function overwriteOnDisk(tabId: string): Promise<void> {
     notifySave(tab.path, tab.content);
     store.showToast(`Saved over the newer ${tab.title}`);
   } catch (e) {
-    useStore.getState().showToast(`Save failed: ${e}`);
+    useStore.getState().showToast(`Couldn't save “${tab.title}”. ${explain(e)}`, "error");
   }
 }

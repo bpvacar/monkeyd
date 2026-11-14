@@ -30,6 +30,10 @@ function findTargetFor(view: EditorView): FindTarget {
       return out;
     },
     selection: () => view.state.selection.main,
+    selectedText: () => {
+      const { from, to } = view.state.selection.main;
+      return view.state.sliceDoc(from, to);
+    },
     show(q, _ms, cur) {
       if (!searchPanelOpen(view.state)) openSearchPanel(view);
       view.dispatch({
@@ -96,6 +100,7 @@ export default function SourceEditor({ initialContent, onChange }: Props) {
             autocorrect: "off",
             autocapitalize: "off",
             spellcheck: "false",
+            "aria-label": "Markdown source",
           }),
           // pasted images become files on disk plus a markdown link
           EditorView.domEventHandlers({

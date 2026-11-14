@@ -13,13 +13,16 @@ export interface FindTarget {
   show(query: string, matches: Match[], current: Match | undefined): void;
   /** Drops the highlights and hands focus back, the last match still selected. */
   close(): void;
+  selectedText(): string;
 }
 
 /** 0 = from the cursor (typing), 1 = next, -1 = previous. */
 export type FindDir = 0 | 1 | -1;
+/** A step, or "selection" for ⌘E (Use Selection for Find). */
+export type FindCommand = FindDir | "selection";
 
-export const findCommand = (dir: FindDir) =>
-  window.dispatchEvent(new CustomEvent<FindDir>("find", { detail: dir }));
+export const findCommand = (cmd: FindCommand) =>
+  window.dispatchEvent(new CustomEvent<FindCommand>("find", { detail: cmd }));
 
 /** Index of the match to select relative to the selection, wrapping; -1 if none. */
 export function pickMatch(ms: Match[], sel: Match, dir: FindDir): number {

@@ -1,16 +1,19 @@
-# Welcome to MonkeyD 🌊
+# Welcome to MonkeyD
 
 *The `.md` editor.*
 
-You're looking at a live markdown document. This whole thing is editable — click anywhere and start typing, or hit **⌘E** to see the raw markdown behind it.
+You're looking at a live markdown document. This whole thing is editable — click anywhere and start typing, or hit **⇧⌘E** to see the raw markdown behind it.
 
 ## Try these first
 
-- **⌘E** — flip between rich text and markdown source
+- **⇧⌘E** — flip between rich text and markdown source
 - **⌘N** — start a new document
 - **⌘O** — open a file · **⇧⌘O** — open a whole folder in the sidebar
+- **⌘F** — find · **⌘G** / **⇧⌘G** — next / previous match
 - **⌘P** — export to PDF
-- **⚲** (top-right) — themes, editor width, and plugins
+- **⌘,** — Settings: themes, editor width, pasted images, plugins
+
+Everything else lives in the menu bar, with its shortcut next to it.
 
 ## A few things it handles
 
@@ -40,8 +43,8 @@ And math, if you need it: $e^{i\pi} + 1 = 0$.
 
 ## Where to go next
 
-The full manual lives in **`~/mdeditor/docs/MonkeyD-Guide.md`** — open that folder with **⇧⌘O** and you'll have this guide plus everything else at hand.
+The full manual is on GitHub: **Help ▸ MonkeyD on GitHub**, in the `docs` folder.
 
 ---
 
-*This welcome opens once. Close it and it won't be back — but you can always reopen the guide from the docs folder. Happy writing.*
+*This welcome opens once on its own. Bring it back any time with **Help ▸ Welcome Guide**. Happy writing.*
