@@ -1,6 +1,11 @@
 import { useEffect, useRef } from "react";
 import { Crepe } from "@milkdown/crepe";
-import { editorViewCtx, editorViewOptionsCtx } from "@milkdown/kit/core";
+import { commandsCtx, editorViewCtx, editorViewOptionsCtx } from "@milkdown/kit/core";
+import { toggleInlineCodeCommand } from "@milkdown/kit/preset/commonmark";
+import { keymap } from "@milkdown/kit/prose/keymap";
+import { Plugin, PluginKey, TextSelection } from "@milkdown/kit/prose/state";
+import { Decoration, DecorationSet, type EditorView } from "@milkdown/kit/prose/view";
+import { $prose } from "@milkdown/kit/utils";
 import "@milkdown/crepe/theme/common/style.css";
 import "@milkdown/crepe/theme/frame.css";
 import {
@@ -10,6 +15,60 @@ import {
 } from "../lib/attachments";
 import { frontmatter } from "../plugins/frontmatter";
 import { wikilink } from "../plugins/wikilink";
+import { useStore } from "../store";
+import { findInDoc, type FindTarget } from "../lib/find";
+
+/** Find matches as decorations, so they follow edits and WebKit repaints them. */
+const findKey = new PluginKey<DecorationSet>("find");
+const findPlugin = $prose(
+  () =>
+    new Plugin<DecorationSet>({
+      key: findKey,
+      state: {
+        init: () => DecorationSet.empty,
+        apply: (tr, deco) => tr.getMeta(findKey) ?? deco.map(tr.mapping, tr.doc),
+      },
+      props: { decorations: (state) => findKey.getState(state) },
+    })
+);
+
+/** ⌘/ = inline code, the rich-text twin of CodeMirror's ⌘/ comment (⌘E is the Mac's Use Selection for Find). */
+const inlineCodeKey = $prose((ctx) =>
+  keymap({ "Mod-/": () => ctx.get(commandsCtx).call(toggleInlineCodeCommand.key) })
+);
+
+function findTargetFor(view: EditorView): FindTarget {
+  return {
+    matches: (q) => findInDoc(view.state.doc, q),
+    selection: () => view.state.selection,
+    selectedText: () => {
+      const { from, to } = view.state.selection;
+      return view.state.doc.textBetween(from, to, " ");
+    },
+    show(_q, ms, cur) {
+      const { doc } = view.state;
+      const deco = DecorationSet.create(
+        doc,
+        ms.map((m) => Decoration.inline(m.from, m.to, { class: m === cur ? "find-match current" : "find-match" }))
+      );
+      const tr = view.state.tr.setMeta(findKey, deco);
+      if (cur) tr.setSelection(TextSelection.create(doc, cur.from, cur.to));
+      view.dispatch(tr);
+      if (!cur) return;
+      // ProseMirror scrolls from wherever focus is (the find input), so scroll the page ourselves
+      const host = view.dom.closest(".editor-host");
+      const at = view.coordsAtPos(cur.from);
+      const box = host?.getBoundingClientRect();
+      if (host && box && (at.top < box.top || at.bottom > box.bottom)) {
+        host.scrollTop += at.top - box.top - box.height / 3;
+      }
+    },
+    close() {
+      view.dispatch(view.state.tr.setMeta(findKey, DecorationSet.empty));
+      view.focus();
+    },
+  };
+}
 
 interface Props {
   /** Content the editor was mounted with; changes remount via key upstream. */
@@ -38,6 +97,8 @@ export default function WysiwygEditor({ initialContent, onChange }: Props) {
     // saving a note rewrites its metadata and escapes every [[link]].
     crepe.editor.use(frontmatter);
     crepe.editor.use(wikilink);
+    crepe.editor.use(findPlugin);
+    crepe.editor.use(inlineCodeKey);
 
     // macOS text substitution rewrites what you type — "abcd" arrives as
     // "Abd" — and its suggestion bubble draws over the row below, which in a
@@ -52,6 +113,7 @@ export default function WysiwygEditor({ initialContent, onChange }: Props) {
           autocapitalize: "off",
           autocomplete: "off",
           spellcheck: "false",
+          "aria-label": "Document",
         },
       }));
     });
@@ -98,17 +160,25 @@ export default function WysiwygEditor({ initialContent, onChange }: Props) {
     root.addEventListener("paste", onPaste, true);
 
     let destroyed = false;
+    let findTarget: FindTarget | null = null;
     crepe
       .create()
       // focus on mount so typing (and ⌘V) land in the document straight away,
       // matching the source editor's behaviour
       .then(() => {
         if (destroyed) return;
-        crepe.editor.action((ctx) => ctx.get(editorViewCtx).focus());
+        crepe.editor.action((ctx) => {
+          const view = ctx.get(editorViewCtx);
+          view.focus();
+          findTarget = findTargetFor(view);
+          useStore.getState().setFindTarget(findTarget);
+        });
       })
       .catch((e) => console.error("crepe mount failed", e));
     return () => {
       root.removeEventListener("paste", onPaste, true);
+      const s = useStore.getState();
+      if (findTarget && s.findTarget === findTarget) s.setFindTarget(null);
       if (!destroyed) {
         destroyed = true;
         crepe.destroy();

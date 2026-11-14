@@ -1,16 +1,26 @@
 import { useCallback, useEffect, useState } from "react";
 import { listen } from "@tauri-apps/api/event";
-import { ask } from "@tauri-apps/plugin-dialog";
 import { useStore } from "./store";
 import { armQuitGuard, getPendingFiles, loadUserThemes, quit } from "./lib/backend";
 import {
   saveTab,
   saveActiveTab,
+  settleUnsaved,
   openFileDialog,
   openFolderDialog,
   exportActivePdf,
+  exportActiveHtml,
   newFileIn,
+  newFolderIn,
+  renameEntry,
+  revealEntry,
+  trashEntry,
 } from "./lib/fileops";
+import { openUrl } from "@tauri-apps/plugin-opener";
+import { findCommand } from "./lib/find";
+import { clearRecent, rememberRecent } from "./lib/recent";
+import FindBar from "./components/FindBar";
+import UnusedImagesPanel from "./components/UnusedImagesPanel";
 import { initPlugins, notifyFileOpen } from "./plugins/runtime";
 import { checkTabsAgainstDisk } from "./lib/sync";
 import Toolbar from "./components/Toolbar";
@@ -153,19 +163,9 @@ function useQuitGuard() {
       for (const t of useStore.getState().tabs) {
         if (t.path && !t.conflict && t.content !== t.savedContent) await saveTab(t.id);
       }
-      const unsaved = useStore
-        .getState()
-        .tabs.filter((t) => t.content !== t.savedContent)
-        .map((t) => `“${t.title}”`);
-      if (
-        unsaved.length > 0 &&
-        !(await ask(`Unsaved changes in ${unsaved.join(", ")}. Quit without saving them?`, {
-          kind: "warning",
-          okLabel: "Quit",
-          cancelLabel: "Cancel",
-        }))
-      ) {
-        return;
+      // what's left (scratch tabs, conflicts, failed saves) is asked about one by one
+      for (const t of useStore.getState().tabs) {
+        if (!(await settleUnsaved(t.id))) return;
       }
       quit();
     });
@@ -176,50 +176,124 @@ function useQuitGuard() {
   }, []);
 }
 
+/** One action per id, shared by the keyboard shortcuts and the native menu. */
+const actions: Record<string, () => void> = {
+  "new-tab": () => useStore.getState().newTab(),
+  // a real file in the workspace, named; plain ⌘N stays a scratch tab
+  "new-file": () => {
+    const s = useStore.getState();
+    if (s.workspace) newFileIn(s.workspace);
+    else s.newTab();
+  },
+  "new-folder": () => {
+    const ws = useStore.getState().workspace;
+    if (ws) newFolderIn(ws);
+  },
+  open: openFileDialog,
+  "open-folder": openFolderDialog,
+  save: saveActiveTab,
+  "save-as": () => {
+    const id = useStore.getState().activeTabId;
+    if (id) saveTab(id, true);
+  },
+  "unused-images": () => useStore.getState().setUnusedImagesOpen(true),
+  "clear-recent": clearRecent,
+  "next-tab": () => cycleTab(1),
+  "prev-tab": () => cycleTab(-1),
+  "export-pdf": exportActivePdf,
+  "export-html": exportActiveHtml,
+  rename: () => withActivePath(renameEntry),
+  reveal: () => withActivePath(revealEntry),
+  trash: () => withActivePath(trashEntry),
+  "close-tab": () => {
+    const s = useStore.getState();
+    if (s.activeTabId) s.closeTab(s.activeTabId);
+  },
+  "toggle-mode": () => {
+    const s = useStore.getState();
+    const tab = s.activeTab();
+    if (tab) s.setMode(tab.mode === "wysiwyg" ? "source" : "wysiwyg");
+  },
+  "toggle-sidebar": () => useStore.getState().toggleSidebar(),
+  // ⌘, is the macOS convention for settings
+  settings: () => {
+    const s = useStore.getState();
+    s.setPluginsPanelOpen(!s.pluginsPanelOpen);
+  },
+  find: () => findCommand(0),
+  "use-selection": () => findCommand("selection"),
+  "find-next": () => findCommand(1),
+  "find-previous": () => findCommand(-1),
+  welcome: () => useStore.getState().newTab(welcomeDoc),
+  help: () => openUrl("https://github.com/bpvacar/monkeyd"),
+};
+
+function cycleTab(step: number) {
+  const s = useStore.getState();
+  const i = s.tabs.findIndex((t) => t.id === s.activeTabId);
+  const next = s.tabs[(i + step + s.tabs.length) % s.tabs.length];
+  if (next) s.setActive(next.id);
+}
+
+function withActivePath(fn: (path: string) => unknown) {
+  const path = useStore.getState().activeTab()?.path;
+  if (path) fn(path);
+}
+
+/** ⌘-key → action id; ⇧ is spelled as a prefix. Mirrored as accelerators in the Rust menu. */
+const SHORTCUTS: Record<string, string> = {
+  n: "new-tab",
+  "⇧n": "new-file",
+  o: "open",
+  "⇧o": "open-folder",
+  s: "save",
+  "⇧s": "save-as",
+  p: "export-pdf",
+  w: "close-tab",
+  e: "use-selection",
+  "⇧e": "toggle-mode",
+  "\\": "toggle-sidebar",
+  ",": "settings",
+  f: "find",
+  g: "find-next",
+  "⇧g": "find-previous",
+};
+
 function useShortcuts() {
   useEffect(() => {
+    // Capture phase, so app shortcuts win over the editors' own keymaps
+    // (Milkdown binds ⌘E to inline code; ours is ⌘/); preventing the default
+    // keeps WebKit from also firing the menu item's accelerator.
     const onKey = (e: KeyboardEvent) => {
-      if (!e.metaKey) return;
-      const s = useStore.getState();
-      const k = e.key.toLowerCase();
-      if (k === "s") {
+      // ⌃Tab / ⌃⇧Tab cycle tabs; ⌘1–9 jump to one (⌘9 = last), as in Safari
+      if (e.ctrlKey && e.key === "Tab") {
         e.preventDefault();
-        saveActiveTab();
-      } else if (k === "n" && e.shiftKey) {
-        // a real file in the workspace, named; plain ⌘N stays a scratch tab
-        e.preventDefault();
-        if (s.workspace) newFileIn(s.workspace);
-        else s.newTab();
-      } else if (k === "n") {
-        e.preventDefault();
-        s.newTab();
-      } else if (k === "o" && e.shiftKey) {
-        e.preventDefault();
-        openFolderDialog();
-      } else if (k === "o") {
-        e.preventDefault();
-        openFileDialog();
-      } else if (k === "w") {
-        e.preventDefault();
-        if (s.activeTabId) s.closeTab(s.activeTabId);
-      } else if (k === "e") {
-        e.preventDefault();
-        const tab = s.activeTab();
-        if (tab) s.setMode(tab.mode === "wysiwyg" ? "source" : "wysiwyg");
-      } else if (k === "p") {
-        e.preventDefault();
-        exportActivePdf();
-      } else if (k === "\\") {
-        e.preventDefault();
-        s.toggleSidebar();
-      } else if (k === ",") {
-        // the macOS convention for settings
-        e.preventDefault();
-        s.setPluginsPanelOpen(!s.pluginsPanelOpen);
+        return cycleTab(e.shiftKey ? -1 : 1);
       }
+      if (!e.metaKey) return;
+      if (/^[1-9]$/.test(e.key) && !e.shiftKey) {
+        e.preventDefault();
+        const { tabs, setActive } = useStore.getState();
+        const t = e.key === "9" ? tabs[tabs.length - 1] : tabs[Number(e.key) - 1];
+        if (t) setActive(t.id);
+        return;
+      }
+      const id = SHORTCUTS[(e.shiftKey ? "⇧" : "") + e.key.toLowerCase()];
+      if (!id) return;
+      e.preventDefault();
+      e.stopPropagation();
+      actions[id]();
     };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
+    window.addEventListener("keydown", onKey, true);
+    rememberRecent();
+    const unlisten = listen<string>("menu", ({ payload: id }) => {
+      if (id.startsWith("recent:")) useStore.getState().openPath(id.slice("recent:".length));
+      else actions[id]?.();
+    });
+    return () => {
+      window.removeEventListener("keydown", onKey, true);
+      unlisten.then((fn) => fn());
+    };
   }, []);
 }
 
@@ -265,6 +339,7 @@ function EditorPane() {
 
 export default function App() {
   const toast = useStore((s) => s.toast);
+  const dismissToast = useStore((s) => s.dismissToast);
   const [pluginsReady, setPluginsReady] = useState(false);
 
   useTheme();
@@ -302,12 +377,34 @@ export default function App() {
       <div className="main">
         <TabBar />
         <ConflictBar />
+        <FindBar />
         {pluginsReady ? <EditorPane /> : null}
       </div>
       <StatusBar />
       <PluginsPanel />
       <PromptDialog />
-      {toast && <div className="toast">{toast}</div>}
+      <UnusedImagesPanel />
+      {toast && (
+        <div className={`toast ${toast.kind}`} role={toast.kind === "error" ? "alert" : "status"}>
+          <span>{toast.text}</span>
+          {toast.action && (
+            <button
+              className="toast-btn"
+              onClick={() => {
+                dismissToast();
+                toast.action?.run();
+              }}
+            >
+              {toast.action.label}
+            </button>
+          )}
+          {toast.kind === "error" && (
+            <button className="toast-btn" aria-label="Dismiss" onClick={dismissToast}>
+              ✕
+            </button>
+          )}
+        </div>
+      )}
     </div>
   );
 }

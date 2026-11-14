@@ -1,5 +1,5 @@
-import { ask, open, save } from "@tauri-apps/plugin-dialog";
-import { dirOf, fileName as baseOf, useStore } from "../store";
+import { ask, message, open, save } from "@tauri-apps/plugin-dialog";
+import { dirOf, explain, fileName as baseOf, useStore } from "../store";
 import { notifySave } from "../plugins/runtime";
 import * as backend from "./backend";
 import { exportToPdf, exportToHtml } from "./exporter";
@@ -25,23 +25,27 @@ export const saveActiveTab = (): Promise<boolean> => {
   return id ? saveTab(id) : Promise.resolve(false);
 };
 
-export async function saveTab(id: string): Promise<boolean> {
+/** `as` = Save As…: always ask where, and write there as a new file. */
+export async function saveTab(id: string, as = false): Promise<boolean> {
   const s = useStore.getState();
   const tab = s.tabs.find((t) => t.id === id);
   if (!tab) return false;
   let path = tab.path;
-  if (!path) {
+  const picking = !path || as;
+  if (picking) {
     const picked = await save({
       filters: MD_FILTER,
-      defaultPath: "Untitled.md",
+      defaultPath: tab.path ?? (tab.title.endsWith(".md") ? tab.title : `${tab.title}.md`),
     });
     if (!picked) return false;
     path = picked;
     s.setTabPath(tab.id, path);
   }
+  if (!path) return false;
   // Refuse to write over an edit made outside the app. The tab is flagged
-  // instead, and the conflict bar asks which version wins.
-  if (tab.diskStamp !== null) {
+  // instead, and the conflict bar asks which version wins. A path just picked
+  // in the save panel was already confirmed there.
+  if (!picking && tab.diskStamp !== null) {
     const current = await backend.fileStamp(path).catch(() => null);
     if (current !== null && current !== tab.diskStamp) {
       s.setConflict(tab.id, true);
@@ -55,9 +59,30 @@ export async function saveTab(id: string): Promise<boolean> {
     notifySave(path, tab.content);
     return true;
   } catch (e) {
-    s.showToast(`Save failed: ${e}`);
+    s.showToast(`Couldn't save “${baseOf(path)}”. ${explain(e)}`, "error", {
+      label: "Save As…",
+      run: () => saveTab(id, true),
+    });
     return false;
   }
+}
+
+/**
+ * The macOS question before a tab with unsaved changes goes away: Save is the
+ * default (Return), Cancel answers Esc. Returns false when the tab must stay.
+ */
+export async function settleUnsaved(id: string): Promise<boolean> {
+  const s = useStore.getState();
+  const tab = s.tabs.find((t) => t.id === id);
+  if (!tab || tab.content === tab.savedContent) return true;
+  s.setActive(id);
+  const choice = await message("Your changes will be lost if you don't save them.", {
+    title: `Do you want to save the changes you made to “${tab.title}”?`,
+    kind: "warning",
+    buttons: { yes: "Save", no: "Don't Save", cancel: "Cancel" },
+  });
+  if (choice === "Save" || choice === "Yes") return saveTab(id);
+  return choice === "Don't Save" || choice === "No";
 }
 
 export async function exportActivePdf() {
@@ -79,7 +104,7 @@ export async function exportActiveHtml() {
     await backend.writeTextFile(picked, exportToHtml(tab.content, tab.title));
     s.showToast("HTML exported");
   } catch (e) {
-    s.showToast(`Export failed: ${e}`);
+    s.showToast(`Couldn't export “${baseOf(picked)}”. ${explain(e)}`, "error");
   }
 }
 
@@ -122,7 +147,7 @@ export async function renameEntry(path: string, isDir = false) {
   });
   if (name === null || name === current) return;
   const problem = invalidName(name);
-  if (problem) return s.showToast(problem);
+  if (problem) return s.showToast(problem, "error");
   // keep the original extension when the new name omits one, so a file
   // doesn't quietly stop being markdown
   const dot = current.lastIndexOf(".");
@@ -134,7 +159,7 @@ export async function renameEntry(path: string, isDir = false) {
     s.pathRenamed(path, target);
     s.refreshTree();
   } catch (e) {
-    s.showToast(String(e));
+    s.showToast(`Couldn't rename “${current}”. ${explain(e)}`, "error");
   }
 }
 
@@ -154,7 +179,7 @@ export async function trashEntry(path: string, isDir = false) {
     s.refreshTree();
     s.showToast(`Moved ${name} to Trash`);
   } catch (e) {
-    s.showToast(`Couldn't move to Trash: ${e}`);
+    s.showToast(`Couldn't move “${name}” to the Trash. ${explain(e)}`, "error");
   }
 }
 
@@ -169,14 +194,14 @@ export async function newFileIn(dir: string) {
   });
   if (name === null) return;
   const problem = invalidName(name);
-  if (problem) return s.showToast(problem);
+  if (problem) return s.showToast(problem, "error");
   const path = `${dir}/${name.includes(".") ? name : `${name}.md`}`;
   try {
     await backend.createFile(path);
     s.refreshTree();
     await s.openPath(path);
   } catch (e) {
-    s.showToast(String(e));
+    s.showToast(`Couldn't create “${name}”. ${explain(e)}`, "error");
   }
 }
 
@@ -190,12 +215,12 @@ export async function newFolderIn(dir: string) {
   });
   if (name === null) return;
   const problem = invalidName(name);
-  if (problem) return s.showToast(problem);
+  if (problem) return s.showToast(problem, "error");
   try {
     await backend.createFolder(`${dir}/${name}`);
     s.refreshTree();
   } catch (e) {
-    s.showToast(String(e));
+    s.showToast(`Couldn't create the folder “${name}”. ${explain(e)}`, "error");
   }
 }
 
@@ -208,7 +233,7 @@ export async function duplicateEntry(path: string) {
     s.refreshTree();
     await s.openPath(target);
   } catch (e) {
-    s.showToast(String(e));
+    s.showToast(`Couldn't duplicate “${baseOf(path)}”. ${explain(e)}`, "error");
   }
 }
 
@@ -217,6 +242,6 @@ export async function revealEntry(path: string) {
     const { revealItemInDir } = await import("@tauri-apps/plugin-opener");
     await revealItemInDir(path);
   } catch (e) {
-    useStore.getState().showToast(String(e));
+    useStore.getState().showToast(`Couldn't show “${baseOf(path)}” in Finder. ${explain(e)}`, "error");
   }
 }

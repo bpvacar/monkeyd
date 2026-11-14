@@ -8,8 +8,8 @@
   --chrome-3: #dfe1e2;
   --page: #ffffff;
   --ink: #1c1f22;
-  --ink-muted: #71767b;
-  --ink-faint: #a4a8ac;
+  --ink-muted: #696e73;
+  --ink-faint: #878c91;
   --line: #e2e3e4;
   --accent: #1273b8;         /* process blue: interactive */
   --pencil: #a9d9e8;         /* non-photo blue: marks that never print */
@@ -36,7 +36,7 @@
   --page: #202225;
   --ink: #e7e5e0;
   --ink-muted: #8c9096;
-  --ink-faint: #5c6065;
+  --ink-faint: #73787e;
   --line: #2e3134;
   --accent: #5fb7e3;
   --pencil: #2c5a6d;
@@ -133,6 +133,11 @@ button:focus-visible, [tabindex]:focus-visible {
 }
 .tool-btn:hover { background: var(--chrome-2); color: var(--ink); }
 .tool-btn:active { background: var(--chrome-3); }
+.tool-btn:disabled { opacity: .35; background: none; color: var(--ink-muted); }
+.tool-btn:focus-visible, .tab:focus-visible, .theme-row:focus-visible, .mode-switch button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
 .tool-btn svg { width: 16px; height: 16px; }
 .tool-btn.labeled { font-size: 12px; font-weight: 500; }
 
@@ -440,7 +445,7 @@ button:focus-visible, [tabindex]:focus-visible {
 }
 .statusbar .spacer { flex: 1; }
 .statusbar .save-state { color: var(--accent); font-style: italic; font-family: var(--font-prose); }
-.statusbar .save-state.saved { color: var(--ink-faint); font-style: normal; font-family: var(--font-ui); }
+.statusbar .save-state.saved { color: var(--ink-muted); font-style: normal; font-family: var(--font-ui); }
 .statusbar button:hover { color: var(--ink); }
 
 /* ---------- plugins panel ---------- */
@@ -467,6 +472,7 @@ button:focus-visible, [tabindex]:focus-visible {
   justify-content: space-between;
   padding: 14px 16px 10px;
 }
+.panel:focus { outline: none; }
 .panel-head h2 { margin: 0; font-size: 14px; font-weight: 600; }
 .panel-body { flex: 1; overflow-y: auto; padding: 0 16px 16px; }
 .setting-field {
@@ -792,6 +798,7 @@ button:focus-visible, [tabindex]:focus-visible {
 }
 .btn:hover { background: var(--chrome-3); }
 .btn.primary { background: var(--accent); color: #fff; }
+[data-theme="dark"] .btn.primary, [data-theme="dark"] .conflict-bar .btn.primary { color: #0e1c26; }
 .btn.primary:hover { filter: brightness(1.08); }
 .btn:disabled { opacity: .5; }
 
@@ -826,3 +833,66 @@ button:focus-visible, [tabindex]:focus-visible {
 .conflict-bar .btn:hover { background: var(--chrome-2); }
 .conflict-bar .btn.primary { background: var(--accent); color: #fff; }
 .conflict-bar .btn.primary:hover { filter: brightness(1.08); }
+
+/* ---------- find bar (⌘F) ---------- */
+.find-bar {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex: none;
+  padding: 6px 10px 6px 14px;
+  background: var(--chrome);
+  border-bottom: 1px solid var(--line);
+}
+.find-bar input {
+  flex: 0 1 280px;
+  min-width: 0;
+  height: 26px;
+  padding: 0 8px;
+  font: inherit;
+  font-size: 12.5px;
+  color: var(--ink);
+  background: var(--page);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  outline: none;
+  user-select: text;
+}
+.find-bar input:focus { border-color: var(--accent); box-shadow: 0 0 0 2px var(--pencil-soft); }
+.find-count {
+  min-width: 72px;
+  padding: 0 6px;
+  font-size: 12px;
+  color: var(--ink-muted);
+  font-variant-numeric: tabular-nums;
+}
+.find-done {
+  margin-left: auto;
+  height: 26px;
+  padding: 0 10px;
+  border-radius: var(--radius);
+  font-size: 12px;
+  color: var(--ink-muted);
+}
+.find-done:hover { background: var(--chrome-2); color: var(--ink); }
+
+/* matches: every hit in pencil, the selected one in ink-blue */
+.editor-host .find-match { background: var(--pencil); border-radius: 2px; }
+.editor-host .find-match.current { background: var(--accent); color: var(--page); }
+.editor-host .source-root .cm-panels { display: none; }
+.editor-host .source-root .cm-searchMatch { background: var(--pencil); }
+.editor-host .source-root .cm-searchMatch-selected { background: var(--accent); color: var(--page); }
+
+/* errors stay until dismissed and may carry one action */
+.toast { display: flex; align-items: center; gap: 12px; max-width: min(560px, 90vw); }
+.toast.error { background: var(--danger); color: #fff; }
+.toast-btn {
+  flex: none;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 600;
+  color: inherit;
+  background: rgba(255,255,255,.16);
+}
+.toast-btn:hover { background: rgba(255,255,255,.28); }

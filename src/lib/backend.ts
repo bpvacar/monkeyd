@@ -71,3 +71,5 @@ export const pluginsDir = () => invoke<string>("plugins_dir");
 export const loadPlugins = () => invoke<PluginSource[]>("load_plugins");
 
 export const loadUserThemes = () => invoke<UserTheme[]>("load_user_themes");
+
+export const setRecent = (paths: string[]) => invoke<void>("set_recent", { paths });

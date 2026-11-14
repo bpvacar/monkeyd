@@ -60,7 +60,7 @@ export default function TabBar() {
   };
 
   return (
-    <div className="tabbar">
+    <div className="tabbar" role="tablist" aria-label="Open documents">
       {tabs.map((t) => {
         const dirty = t.content !== t.savedContent;
         return (
@@ -78,6 +78,19 @@ export default function TabBar() {
             title={t.path ?? "Unsaved"}
             role="tab"
             aria-selected={t.id === activeTabId}
+            data-tab={t.id}
+            // roving focus: Tab lands on the active tab, ←/→ move between them
+            tabIndex={t.id === activeTabId ? 0 : -1}
+            onKeyDown={(e) => {
+              if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
+              e.preventDefault();
+              const i = tabs.indexOf(t) + (e.key === "ArrowRight" ? 1 : -1);
+              const next = tabs[(i + tabs.length) % tabs.length];
+              setActive(next.id);
+              requestAnimationFrame(() =>
+                document.querySelector<HTMLElement>(`[data-tab="${next.id}"]`)?.focus()
+              );
+            }}
           >
             {dirty && <span className="dot" title="Unsaved changes" />}
             <span className="label">{t.title}</span>

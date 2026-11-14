@@ -1,5 +1,5 @@
 import { convertFileSrc } from "@tauri-apps/api/core";
-import { dirOf, useStore } from "../store";
+import { dirOf, explain, useStore } from "../store";
 import { writeBinaryFile } from "./backend";
 
 /** `20260731143022` — the timestamp shape Obsidian uses for pasted images. */
@@ -190,7 +190,7 @@ export async function savePastedImage(
       }
     }
   } catch (e) {
-    s.showToast(`Couldn't save image: ${e}`);
+    s.showToast(`Couldn't save the pasted image. ${explain(e)}`, "error");
     return null;
   }
 
