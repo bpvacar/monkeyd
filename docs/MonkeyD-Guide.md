@@ -281,11 +281,18 @@ Already installed as `reading-time.js` — adds a *Show reading time* command th
 | ⌘O       | Open file(s)              |
 | ⇧⌘O      | Open folder as workspace  |
 | ⌘S       | Save                      |
+| ⇧⌘S      | Save As…                  |
 | ⌘W       | Close tab                 |
+| ⌃Tab / ⇧⌘[ ⇧⌘] | Previous / next tab |
+| ⌘1–9     | Go to tab (⌘9 = last)     |
 | ⇧⌘E      | Toggle rich text ↔ source |
 | ⌘/       | Inline code (rich text) · comment line (source) |
 | ⌘F       | Find (⌘G next, ⇧⌘G previous) |
 | ⌘E       | Use selection for find |
+| ⌥⌘F      | Find and replace          |
+| ⌘B / ⌘I / ⌘K | Bold / italic / link  |
+| ⌥⌘1–6    | Heading 1–6 (again to undo) |
+| ⌘= / ⌘- / ⌘0 | Zoom in / out / actual size |
 | ⌘P       | Export as PDF             |
 | ⌘\\      | Toggle sidebar            |
 | ⌘,       | Settings                  |

@@ -44,7 +44,7 @@ permissions (they can read and write any file), so only install code you trust.
 
 ## Keyboard shortcuts
 
-`⌘N` new · `⌘O` open file · `⇧⌘O` open folder · `⌘S` save · `⌘W` close tab · `⇧⌘E` toggle WYSIWYG/source · `⌘F` find · `⌘E` use selection for find · `⌘/` inline code (rich) / comment (source) · `⌘P` export PDF · `⌘\` toggle sidebar · `⌘,` settings
+`⌘N` new · `⌘O` open file · `⇧⌘O` open folder · `⌘S` save · `⌘W` close tab · `⇧⌘E` toggle WYSIWYG/source · `⌘F` find · `⌥⌘F` replace · `⌘E` use selection for find · `⌘B`/`⌘I`/`⌘K` bold/italic/link · `⌥⌘1–6` headings · `⌘=`/`⌘-`/`⌘0` zoom · `⌘/` inline code (rich) / comment (source) · `⌘P` export PDF · `⌘\` toggle sidebar · `⌘,` settings
 
 ## Development
 

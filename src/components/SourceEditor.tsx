@@ -17,6 +17,7 @@ import { tags } from "@lezer/highlight";
 import { imageFromClipboard, savePastedImage } from "../lib/attachments";
 import { useStore } from "../store";
 import type { FindTarget, Match } from "../lib/find";
+import { formatSource, type FormatTarget } from "../lib/format";
 
 /** Drives CodeMirror's own search, so matches highlight even outside the rendered viewport. */
 function findTargetFor(view: EditorView): FindTarget {
@@ -47,6 +48,11 @@ function findTargetFor(view: EditorView): FindTarget {
     close() {
       closeSearchPanel(view);
       view.focus();
+    },
+    replace(ms, text) {
+      if (!ms.length) return;
+      const changes = view.state.changes(ms.map((m) => ({ from: m.from, to: m.to, insert: text })));
+      view.dispatch({ changes, selection: { anchor: changes.mapPos(ms[ms.length - 1].to) } });
     },
   };
 }
@@ -128,10 +134,16 @@ export default function SourceEditor({ initialContent, onChange }: Props) {
     });
     view.focus();
     const findTarget = findTargetFor(view);
+    const formatTarget: FormatTarget = (f) => {
+      view.dispatch(formatSource(view.state, f));
+      view.focus();
+    };
     useStore.getState().setFindTarget(findTarget);
+    useStore.getState().setFormatTarget(formatTarget);
     return () => {
       const s = useStore.getState();
       if (s.findTarget === findTarget) s.setFindTarget(null);
+      if (s.formatTarget === formatTarget) s.setFormatTarget(null);
       view.destroy();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps

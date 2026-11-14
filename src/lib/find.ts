@@ -14,12 +14,14 @@ export interface FindTarget {
   /** Drops the highlights and hands focus back, the last match still selected. */
   close(): void;
   selectedText(): string;
+  /** Replaces every given match in one undoable step; the cursor ends after the last. */
+  replace(matches: Match[], text: string): void;
 }
 
 /** 0 = from the cursor (typing), 1 = next, -1 = previous. */
 export type FindDir = 0 | 1 | -1;
-/** A step, or "selection" for ⌘E (Use Selection for Find). */
-export type FindCommand = FindDir | "selection";
+/** A step, "selection" for ⌘E (Use Selection for Find), or "replace" for ⌥⌘F. */
+export type FindCommand = FindDir | "selection" | "replace";
 
 export const findCommand = (cmd: FindCommand) =>
   window.dispatchEvent(new CustomEvent<FindCommand>("find", { detail: cmd }));
