@@ -14,6 +14,7 @@ import {
   savePastedImage,
 } from "../lib/attachments";
 import { frontmatter } from "../plugins/frontmatter";
+import { keepMarkdownAsWritten } from "../plugins/fidelity";
 import { wikilink } from "../plugins/wikilink";
 import { useStore } from "../store";
 import { findInDoc, type FindTarget } from "../lib/find";
@@ -97,6 +98,9 @@ export default function WysiwygEditor({ initialContent, onChange }: Props) {
     // saving a note rewrites its metadata and escapes every [[link]].
     crepe.editor.use(frontmatter);
     crepe.editor.use(wikilink);
+    // every edit re-serializes the whole file: keep its alt texts, bullets,
+    // breaks and tables the way the user wrote them
+    keepMarkdownAsWritten(crepe.editor, initialContent);
     crepe.editor.use(findPlugin);
     crepe.editor.use(inlineCodeKey);
 
@@ -129,8 +133,7 @@ export default function WysiwygEditor({ initialContent, onChange }: Props) {
       crepe.editor.action((ctx) => {
         const view = ctx.get(editorViewCtx);
         const { state } = view;
-        // plain inline image, not Crepe's image-block: the latter encodes its
-        // aspect ratio into the alt text, which would leak into the markdown
+        // plain inline image, so a pasted screenshot stays inline with the text
         const type =
           state.schema.nodes.image ?? state.schema.nodes["image-block"];
         try {
