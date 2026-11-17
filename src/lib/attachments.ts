@@ -123,6 +123,15 @@ async function encodeForDisk(file: File, maxEdge: number): Promise<Encoded> {
   return { bytes: await toBytes(blob), ext: png ? "png" : "jpg" };
 }
 
+/** True while the drag carries files from outside (Finder), not text from inside the page. */
+export const isFileDrag = (e: DragEvent): boolean =>
+  !!e.dataTransfer && Array.from(e.dataTransfer.types).includes("Files");
+
+/** The images in a drop, in the order they were dragged. */
+export function imagesFromDrop(data: DataTransfer | null): File[] {
+  return Array.from(data?.files ?? []).filter((f) => f.type.startsWith("image/"));
+}
+
 /** Returns the first image in a clipboard payload, or null if there is none. */
 export function imageFromClipboard(data: DataTransfer | null): File | null {
   if (!data) return null;
@@ -152,7 +161,9 @@ export interface SavedAttachment {
  * the editor untouched in that case.
  */
 export async function savePastedImage(
-  file: File
+  file: File,
+  /** File name to keep, without extension; pasted images get a timestamp instead. */
+  baseName?: string
 ): Promise<SavedAttachment | null> {
   const s = useStore.getState();
   const tab = s.activeTab();
@@ -180,7 +191,7 @@ export async function savePastedImage(
     // same-second pastes collide; the backend refuses to overwrite, so count
     // up the way Obsidian does ("Pasted image … 1.png")
     for (let n = 0; ; n++) {
-      name = `Pasted image ${when}${n ? ` ${n}` : ""}.${ext}`;
+      name = `${baseName || `Pasted image ${when}`}${n ? ` ${n}` : ""}.${ext}`;
       absPath = folder ? `${base}/${folder}/${name}` : `${base}/${name}`;
       try {
         await writeBinaryFile(absPath, bytes);
@@ -198,4 +209,21 @@ export async function savePastedImage(
   const src = encodeURI(relativePath(docDir ?? base, absPath));
   s.showToast(`Saved ${name}`);
   return { markdown: `![](${src})`, src, absPath };
+}
+
+/**
+ * Saves dropped images under their own names (`photo.png`, then `photo 1.png`
+ * on a clash) and returns their links in drop order. Stops at the first one
+ * that can't be saved, so an unsaved document shows one toast, not one each.
+ */
+export async function saveDroppedImages(files: File[]): Promise<SavedAttachment[]> {
+  const saved: SavedAttachment[] = [];
+  for (const file of files) {
+    const stem = file.name.replace(/\.[^.]*$/, "").replace(/[/:]/g, "-").trim();
+    const one = await savePastedImage(file, stem);
+    if (!one) break;
+    saved.push(one);
+  }
+  if (saved.length > 1) useStore.getState().showToast(`Saved ${saved.length} images`);
+  return saved;
 }

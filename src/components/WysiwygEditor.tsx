@@ -12,14 +12,17 @@ import { linkTooltipAPI } from "@milkdown/kit/component/link-tooltip";
 import { lift } from "@milkdown/kit/prose/commands";
 import type { Ctx } from "@milkdown/kit/ctx";
 import { keymap } from "@milkdown/kit/prose/keymap";
-import { Plugin, PluginKey, TextSelection } from "@milkdown/kit/prose/state";
+import { Plugin, PluginKey, Selection, TextSelection } from "@milkdown/kit/prose/state";
 import { Decoration, DecorationSet, type EditorView } from "@milkdown/kit/prose/view";
 import { $prose } from "@milkdown/kit/utils";
 import "@milkdown/crepe/theme/common/style.css";
 import "@milkdown/crepe/theme/frame.css";
 import {
   imageFromClipboard,
+  imagesFromDrop,
+  isFileDrag,
   resolveImageSrc,
+  saveDroppedImages,
   savePastedImage,
 } from "../lib/attachments";
 import { frontmatter } from "../plugins/frontmatter";
@@ -60,6 +63,19 @@ function formatTargetFor(ctx: Ctx): FormatTarget {
     }
     view.focus();
   };
+}
+
+/**
+ * The document position under a point, as Google Docs picks it: a point in the
+ * margin or below the text snaps to the nearest line, so a drop anywhere on
+ * the page lands somewhere sensible.
+ */
+function dropPosAt(view: EditorView, x: number, y: number): Selection | null {
+  const r = view.dom.getBoundingClientRect();
+  const left = Math.min(Math.max(x, r.left + 1), r.right - 1);
+  const top = Math.min(Math.max(y, r.top + 1), r.bottom - 1);
+  const hit = view.posAtCoords({ left, top });
+  return hit ? Selection.near(view.state.doc.resolve(hit.pos)) : null;
 }
 
 /** Find matches as decorations, so they follow edits and WebKit repaints them. */
@@ -212,6 +228,67 @@ export default function WysiwygEditor({ initialContent, onChange }: Props) {
     };
     root.addEventListener("paste", onPaste, true);
 
+    // Images dragged in from Finder go where they're dropped, with a caret
+    // following the pointer meanwhile. Capture phase again: Crepe's upload
+    // plugin would store them as blob: URLs that die with the window, and its
+    // block-level drop line can't show a spot inside a sentence.
+    const host = (root.closest(".editor-host") as HTMLElement | null) ?? root;
+    const caret = document.createElement("div");
+    caret.className = "drop-caret";
+    caret.hidden = true;
+    host.appendChild(caret);
+    let hideTimer = 0;
+    const viewOrNull = (): EditorView | null => {
+      try {
+        return crepe.editor.action((ctx) => ctx.get(editorViewCtx));
+      } catch {
+        return null; // not mounted yet
+      }
+    };
+    const onDragOver = (event: DragEvent) => {
+      if (!isFileDrag(event)) return;
+      event.preventDefault();
+      event.stopPropagation();
+      event.dataTransfer!.dropEffect = "copy";
+      const view = viewOrNull();
+      const sel = view && dropPosAt(view, event.clientX, event.clientY);
+      if (view && sel) {
+        const at = view.coordsAtPos(sel.from);
+        Object.assign(caret.style, {
+          left: `${at.left}px`,
+          top: `${at.top}px`,
+          height: `${Math.max(at.bottom - at.top, 16)}px`,
+        });
+        caret.hidden = false;
+      }
+      // dragover repeats while the pointer is over the page; when it stops
+      // coming the drag has left (WebKit's dragleave fires between children)
+      window.clearTimeout(hideTimer);
+      hideTimer = window.setTimeout(() => (caret.hidden = true), 150);
+    };
+    const onDrop = (event: DragEvent) => {
+      if (!isFileDrag(event)) return;
+      event.preventDefault();
+      event.stopPropagation();
+      caret.hidden = true;
+      const files = imagesFromDrop(event.dataTransfer);
+      if (!files.length) {
+        useStore.getState().showToast("Only images can be dropped into a document");
+        return;
+      }
+      const view = viewOrNull();
+      const sel = view && dropPosAt(view, event.clientX, event.clientY);
+      if (!view || !sel) return;
+      // the caret moves to the drop point at once; the images follow when saved
+      view.dispatch(view.state.tr.setSelection(sel));
+      view.focus();
+      saveDroppedImages(files).then((saved) => {
+        for (const one of saved) insertImage(one.src, one.markdown);
+      });
+    };
+    host.addEventListener("dragover", onDragOver, true);
+    host.addEventListener("drop", onDrop, true);
+
     let destroyed = false;
     let findTarget: FindTarget | null = null;
     let formatTarget: FormatTarget | null = null;
@@ -233,6 +310,10 @@ export default function WysiwygEditor({ initialContent, onChange }: Props) {
       .catch((e) => console.error("crepe mount failed", e));
     return () => {
       root.removeEventListener("paste", onPaste, true);
+      host.removeEventListener("dragover", onDragOver, true);
+      host.removeEventListener("drop", onDrop, true);
+      window.clearTimeout(hideTimer);
+      caret.remove();
       const s = useStore.getState();
       if (findTarget && s.findTarget === findTarget) s.setFindTarget(null);
       if (formatTarget && s.formatTarget === formatTarget) s.setFormatTarget(null);

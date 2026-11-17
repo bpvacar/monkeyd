@@ -312,6 +312,19 @@ button:focus-visible, [tabindex]:focus-visible {
   position: relative;
 }
 
+/* where a dragged-in image will land (rich text draws it; CodeMirror has its own) */
+.drop-caret {
+  position: fixed;
+  width: 2px;
+  margin-left: -1px;
+  background: var(--accent);
+  border-radius: 1px;
+  pointer-events: none;
+  z-index: 5;
+}
+.drop-caret[hidden] { display: none; }
+.editor-host .source-root .cm-dropCursor { border-left: 2px solid var(--accent); }
+
 /* milkdown (wysiwyg) */
 .editor-host .milkdown {
   max-width: var(--col-prose);

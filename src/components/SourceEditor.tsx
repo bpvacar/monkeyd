@@ -1,5 +1,12 @@
 import { useEffect, useRef } from "react";
-import { EditorView, keymap, lineNumbers, drawSelection, highlightSpecialChars } from "@codemirror/view";
+import {
+  EditorView,
+  keymap,
+  lineNumbers,
+  drawSelection,
+  dropCursor,
+  highlightSpecialChars,
+} from "@codemirror/view";
 import { EditorState, EditorSelection } from "@codemirror/state";
 import {
   search,
@@ -14,7 +21,13 @@ import { markdown, markdownLanguage } from "@codemirror/lang-markdown";
 import { languages } from "@codemirror/language-data";
 import { syntaxHighlighting, HighlightStyle } from "@codemirror/language";
 import { tags } from "@lezer/highlight";
-import { imageFromClipboard, savePastedImage } from "../lib/attachments";
+import {
+  imageFromClipboard,
+  imagesFromDrop,
+  isFileDrag,
+  saveDroppedImages,
+  savePastedImage,
+} from "../lib/attachments";
 import { useStore } from "../store";
 import type { FindTarget, Match } from "../lib/find";
 import { formatSource, type FormatTarget } from "../lib/format";
@@ -57,6 +70,13 @@ function findTargetFor(view: EditorView): FindTarget {
   };
 }
 
+/** Replaces the selection with `text` and leaves the cursor after it. */
+function insertAtCursor(view: EditorView, text: string) {
+  const { from, to } = view.state.selection.main;
+  view.dispatch({ changes: { from, to, insert: text }, selection: { anchor: from + text.length } });
+  view.focus();
+}
+
 const mdHighlight = HighlightStyle.define([
   { tag: tags.heading, fontWeight: "700", color: "var(--ink)" },
   { tag: tags.strong, fontWeight: "700" },
@@ -93,6 +113,8 @@ export default function SourceEditor({ initialContent, onChange }: Props) {
           highlightSpecialChars(),
           history(),
           drawSelection(),
+          // before the handlers below, so it sees the drop and clears itself
+          dropCursor(),
           // CodeMirror only highlights matches while its panel is open; ours is
           // an empty, hidden one because the visible UI is FindBar
           search({ createPanel: () => ({ dom: document.createElement("div") }) }),
@@ -115,13 +137,31 @@ export default function SourceEditor({ initialContent, onChange }: Props) {
               if (!file) return false;
               event.preventDefault();
               savePastedImage(file).then((saved) => {
-                if (!saved) return;
-                const { from, to } = view.state.selection.main;
-                view.dispatch({
-                  changes: { from, to, insert: saved.markdown },
-                  selection: { anchor: from + saved.markdown.length },
-                });
-                view.focus();
+                if (saved) insertAtCursor(view, saved.markdown);
+              });
+              return true;
+            },
+            // dropped images too, as links at the drop point. Without this
+            // CodeMirror would paste the file's bytes in as text.
+            dragover(event) {
+              if (!isFileDrag(event)) return false;
+              event.preventDefault();
+              event.dataTransfer!.dropEffect = "copy";
+              return false;
+            },
+            drop(event, view) {
+              if (!isFileDrag(event)) return false;
+              event.preventDefault();
+              const files = imagesFromDrop(event.dataTransfer);
+              if (!files.length) {
+                useStore.getState().showToast("Only images can be dropped into a document");
+                return true;
+              }
+              const pos = view.posAtCoords({ x: event.clientX, y: event.clientY }, false);
+              view.dispatch({ selection: { anchor: pos } });
+              view.focus();
+              saveDroppedImages(files).then((saved) => {
+                if (saved.length) insertAtCursor(view, saved.map((s) => s.markdown).join("\n"));
               });
               return true;
             },
